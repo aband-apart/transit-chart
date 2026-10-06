@@ -10,16 +10,23 @@
     <div id="app">
       <header class="topbar">
         <div class="brand"><span class="brand-mark">☉</span><span>Transit Chart</span></div>
+        <div class="profile-controls">
+          <select id="profile-select" aria-label="Active chart"></select>
+          <button id="add-profile" class="btn small" title="Add another chart">+ Add</button>
+          <button id="edit-birth" class="btn small ghost">Edit</button>
+          <label class="compare-switch">Compare with
+            <select id="compare-select" aria-label="Compare with"></select>
+          </label>
+        </div>
         <div id="profile-summary" class="profile-summary"></div>
-        <button id="edit-birth" class="btn ghost">Birth details</button>
       </header>
 
       <main id="main" class="layout" hidden>
         <section class="left">
           <div id="wheel" class="wheel-wrap"></div>
           <div class="legend">
-            <span><i class="dot transit"></i>Outer ring: transiting planets</span>
-            <span><i class="dot natal"></i>Inner ring: your natal chart</span>
+            <span><i class="dot transit"></i><span id="legend-outer">Outer ring: transiting planets</span></span>
+            <span><i class="dot natal"></i><span id="legend-inner">Inner ring: your natal chart</span></span>
             <span><i class="line hard"></i>Challenging</span>
             <span><i class="line flow"></i>Flowing</span>
             <span><i class="line intense"></i>Conjunction</span>
@@ -44,6 +51,7 @@
             <button role="tab" data-tab="transits" class="tab">Active transits</button>
             <button role="tab" data-tab="forecast" class="tab">Forecast</button>
             <button role="tab" data-tab="natal" class="tab">Natal chart</button>
+            <button role="tab" data-tab="compare" class="tab" id="compare-tab" hidden>Compare</button>
           </nav>
           <div id="panel" class="panel"></div>
         </section>
@@ -59,9 +67,19 @@
 
     <dialog id="birth-dialog">
       <form id="birth-form" method="dialog" autocomplete="off">
-        <h2>Birth details</h2>
+        <h2 id="form-title">Birth details</h2>
+        <p class="hint" id="kind-hint">For a country, organization or event, use the founding or start moment. Time and place matter, and many have disputed times.</p>
         <p class="hint">Stored only in this browser (localStorage). A place lookup sends just the city name to Open-Meteo's geocoder.</p>
-        <label>Name (optional)<input name="name" type="text" /></label>
+        <div class="row">
+          <label>Name<input name="name" type="text" placeholder="e.g. Alex, USA, Acme Inc." /></label>
+          <label>Type
+            <select name="kind">
+              <option value="person">Person</option>
+              <option value="place">Country or place</option>
+              <option value="event">Event or organization</option>
+            </select>
+          </label>
+        </div>
         <div class="row">
           <label>Date of birth<input name="date" type="date" required /></label>
           <label>Time of birth<input name="time" type="time" value="12:00" /></label>
@@ -89,6 +107,7 @@
         </label>
         <p id="form-error" class="error" hidden></p>
         <div class="actions">
+          <button type="button" id="delete-profile" class="btn ghost danger" hidden>Delete</button>
           <button type="button" id="example" class="btn ghost">Use an example</button>
           <span class="spacer"></span>
           <button type="button" id="cancel" class="btn ghost">Cancel</button>

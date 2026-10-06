@@ -1,21 +1,29 @@
 import './style.css';
 import { initEphemeris, dateToJd, jdToDate } from './astro/ephemeris.js';
 import { natalFromBirth, buildChart, formatPos, houseOf, withSolarHouses, HOUSE_SYSTEMS } from './astro/chart.js';
-import { transitAspects } from './astro/aspects.js';
+import { transitAspects, synastryAspects } from './astro/aspects.js';
 import { forecast, aspectPasses, outerAspects } from './astro/transits.js';
 import { isValidTimeZone } from './astro/time.js';
-import { describeAspect, describeEvent, buildReading, skyToday, natalPortrait, natalLabel, ordinal } from './astro/interpret.js';
+import { describeAspect, describeEvent, buildReading, skyToday, natalPortrait, natalLabel, ordinal, describeSynastry, compareSummary } from './astro/interpret.js';
 import { PLANETS, SIGNS, HOUSES, PLACEMENT_LINE } from './data/astro-data.js';
 import { renderWheel } from './ui/wheel.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const VS = '︎';
-const STORE_KEY = 'transit-chart.profile';
+const STORE_KEY = 'transit-chart.profiles';
+const LEGACY_KEY = 'transit-chart.profile';
+const KIND_LABEL = { person: 'Person', place: 'Country / place', event: 'Event / org' };
+const uid = () => Math.random().toString(36).slice(2, 9);
 
-const EXAMPLE = { name: 'Example chart', date: '1990-07-04', time: '14:30', timeUnknown: false, place: 'New York, United States', lat: 40.7128, lon: -74.006, tz: 'America/New_York' };
+const EXAMPLE = { id: 'ex1', kind: 'person', name: 'Example chart', date: '1990-07-04', time: '14:30', timeUnknown: false, place: 'New York, United States', lat: 40.7128, lon: -74.006, tz: 'America/New_York' };
+
+const EXAMPLE2 = { id: 'ex2', kind: 'place', name: 'United States (example)', date: '1776-07-04', time: '17:10', timeUnknown: false, place: 'Philadelphia, United States', lat: 39.9526, lon: -75.1652, tz: 'America/New_York' };
 
 const state = {
+  profiles: [],
+  activeId: null,
+  compareId: '',
   profile: null,
   natal: null,
   now: new Date(),
@@ -46,6 +54,26 @@ function computeNatal(profile) {
   if (profile.timeUnknown) natal = withSolarHouses(natal);
   natal.timeUnknown = !!profile.timeUnknown;
   return natal;
+}
+
+const natalCache = new Map();
+function natalOf(profile) {
+  const key = JSON.stringify([profile.date, profile.time, profile.timeUnknown, profile.lat, profile.lon, profile.tz, profile.houseSystem]);
+  if (!natalCache.has(key)) natalCache.set(key, Object.assign(computeNatal(profile), { _key: key }));
+  return natalCache.get(key);
+}
+
+const nameOf = (p) => p.name || KIND_LABEL[p.kind] || 'Chart';
+const compareProfile = () => state.profiles.find((p) => p.id === state.compareId && p.id !== state.activeId) || null;
+const isCompareView = () => state.tab === 'compare' && !!compareProfile();
+
+function compareData() {
+  const pb = compareProfile();
+  const A = state.natal;
+  const B = natalOf(pb);
+  const skipA = A.timeUnknown ? ['asc', 'mc'] : [];
+  const skipB = B.timeUnknown ? ['asc', 'mc'] : [];
+  return { A, B, pa: state.profile, pb, nameA: nameOf(state.profile), nameB: nameOf(pb), aspects: synastryAspects(B.points, A.points, { skipKeysA: skipA, skipKeysB: skipB }) };
 }
 
 function current() {
@@ -83,8 +111,19 @@ function renderProfile() {
 }
 
 function renderWheelView() {
+  const cmp = isCompareView();
+  $('.left').classList.toggle('compare', cmp);
+  if (cmp) {
+    const c = compareData();
+    $('#wheel').innerHTML = renderWheel({ natal: c.A, transit: { points: c.B.points }, aspects: c.aspects, selected: state.selected, outerLabel: c.nameB, innerLabel: c.nameA });
+    $('#legend-outer').textContent = `Outer ring: ${c.nameB}`;
+    $('#legend-inner').textContent = `Inner ring: ${c.nameA}`;
+    return;
+  }
   const { transit, aspects } = current();
   $('#wheel').innerHTML = renderWheel({ natal: state.natal, transit, aspects, selected: state.selected });
+  $('#legend-outer').textContent = 'Outer ring: transiting planets';
+  $('#legend-inner').textContent = `Inner ring: ${state.profile.kind === 'person' ? 'your' : nameOf(state.profile) + "'s"} natal chart`;
 }
 
 function aspectKey(a) {
@@ -234,6 +273,8 @@ function natalView() {
   const port = natalPortrait(n);
   const keys = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'chiron', 'node', 'southnode', 'lilith', 'pallas'];
   if (!n.timeUnknown) keys.push('asc', 'mc', 'ic', 'dsc');
+  const missing = keys.filter((k) => !n.points[k]);
+  keys.splice(0, keys.length, ...keys.filter((k) => n.points[k]));
   const rows = keys.map((k) => {
     const p = n.points[k];
     return `<tr><td>${g(k)}${esc(PLANETS[k].name)}</td><td>${sg(p.sign)}${esc(SIGNS[p.sign].name)}</td><td>${formatPos(p.lon, { withSign: false })}${p.retro ? ' ℞' : ''}</td><td>${ordinal(p.house)}</td></tr>`;
@@ -241,6 +282,7 @@ function natalView() {
   const bar = (list) => list.map(([k, v]) => `<span>${esc(k)}</span><div class="bar"><i style="width:${v * 10}%"></i></div><span>${v}</span>`).join('');
   return `
     ${n.timeUnknown ? '<div class="banner">Birth time unknown: Rising sign and angles are omitted, and houses use your Sun sign as the 1st house.</div>' : ''}
+    ${missing.length ? `<div class="banner">${missing.map((k) => PLANETS[k].name).join(' and ')} can't be calculated for this date (the bundled asteroid data does not reach this far back).</div>` : ''}
     <div class="card"><div class="eyebrow">Your signature</div><div class="big3">
       <p><b>${esc(port.sun)}</b></p><p><b>${esc(port.moon)}</b></p>${n.timeUnknown ? '' : `<p><b>${esc(port.rising)}</b></p>`}
       <p class="muted">${esc(port.dominant)} ${n.timeUnknown ? '' : esc(port.ruler)}</p></div></div>
@@ -254,8 +296,56 @@ function natalView() {
     <div class="card"><table><thead><tr><th>House</th><th>Theme</th><th>Cusp</th></tr></thead><tbody>${HOUSES.map((h, i) => `<tr><td>${h.n}</td><td>${esc(h.label)}</td><td>${formatPos(n.cusps[i])}</td></tr>`).join('')}</tbody></table></div>`}`;
 }
 
+function synCard(a, c) {
+  const d = describeSynastry(a, c.nameA, c.nameB);
+  const sel = state.selected === aspectKey(a);
+  return `<article class="card tcard ${a.tone}${sel ? ' selected' : ''}" data-asp="${aspectKey(a)}">
+    <header><span class="glyphs">${PLANETS[a.transit].glyph}${VS} ${a.glyph}${VS} ${PLANETS[a.target].glyph}${VS}</span><h3>${esc(d.title)}</h3></header>
+    <p>${esc(d.text)}</p>
+    <div class="chips"><span class="chip t-${a.tone}">${toneLabel[a.tone]}</span><span class="chip ${a.orb < 1 ? 'hot' : ''}">orb ${a.orb.toFixed(1)}°${a.orb < 1 ? ' · tight' : ''}</span></div>
+  </article>`;
+}
+
+function overlayTable(title, from, to, fromName, toName) {
+  const keys = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'chiron', 'node'];
+  const rows = keys.filter((k) => from.points[k]).map((k) => {
+    const lon = from.points[k].lon;
+    const h = houseOf(lon, to.cusps);
+    return `<tr><td>${g(k)}${esc(PLANETS[k].name)}</td><td>${sg(Math.floor(lon / 30))}${esc(SIGNS[Math.floor(lon / 30)].name)}</td><td>${ordinal(h)} · ${esc(HOUSES[h - 1].label)}</td></tr>`;
+  }).join('');
+  return `<div class="card"><div class="eyebrow">${esc(title)}</div><table><thead><tr><th>${esc(fromName)}</th><th>Sign</th><th>Lands in ${esc(toName)}'s house</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function compareView() {
+  const c = compareData();
+  const sum = compareSummary(c.aspects, c.nameA, c.nameB);
+  const top = c.aspects.slice(0, 10);
+  const li = (x) => `<li>${esc(x.title)}<span class="src">${esc(x.text)}</span></li>`;
+  const unusual = c.pa.kind !== 'person' || c.pb.kind !== 'person';
+  return `
+    ${c.A.timeUnknown || c.B.timeUnknown ? '<div class="banner">One chart has no birth time, so Ascendant and Midheaven contacts are left out, and house overlays use Sun-sign houses.</div>' : ''}
+    <section class="card lead">
+      <div class="eyebrow"><span class="who a">${esc(c.nameA)}</span> inner &nbsp; <span class="who b">${esc(c.nameB)}</span> outer</div>
+      <h2>${esc(c.nameA)} & ${esc(c.nameB)}: a ${esc(sum.climate)} connection</h2>
+      <p>${esc(sum.climateText)}</p>
+      ${sum.themes.length ? `<ul class="plain">${sum.themes.map((t) => `<li class="t-${t.tone}">${esc(t.text)}</li>`).join('')}</ul>` : '<p class="muted">No standout personal-planet links, so this is a quieter connection.</p>'}
+      ${unusual ? '<p class="muted small" style="margin-top:10px">Charts for countries, organizations and events depend on the chosen founding moment, which is often debated. Treat the result as one lens.</p>' : ''}
+    </section>
+    <div class="two">
+      <div class="card"><div class="eyebrow">Where it flows</div><ul class="plain">${sum.strengths.length ? sum.strengths.map(li).join('') : '<li class="muted">No major easy links.</li>'}</ul></div>
+      <div class="card"><div class="eyebrow">Where it rubs</div><ul class="plain">${sum.frictions.length ? sum.frictions.map(li).join('') : '<li class="muted">No major friction.</li>'}</ul></div>
+    </div>
+    <h3 class="section-title">Strongest links</h3>
+    ${top.length ? top.map((a) => synCard(a, c)).join('') : '<p class="muted">No tight aspects between these charts.</p>'}
+    <h3 class="section-title">House overlays</h3>
+    ${overlayTable(`${c.nameB} in ${c.nameA}'s chart`, c.B, c.A, c.nameB, c.nameA)}
+    ${overlayTable(`${c.nameA} in ${c.nameB}'s chart`, c.A, c.B, c.nameA, c.nameB)}
+    <p class="disclaimer">Comparison charts show where two charts connect, not whether a relationship will succeed. Slow outer-planet pairs are left out because whole generations share them.</p>`;
+}
+
 function renderPanel() {
-  const view = { reading: readingView, transits: transitsView, forecast: forecastView, natal: natalView }[state.tab];
+  if (state.tab === 'compare' && !compareProfile()) state.tab = 'reading';
+  const view = { reading: readingView, transits: transitsView, forecast: forecastView, natal: natalView, compare: compareView }[state.tab];
   $('#panel').innerHTML = view();
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === state.tab));
 }
@@ -284,7 +374,7 @@ function setWhen(d) {
 
 function select(key, { switchTab = false } = {}) {
   state.selected = state.selected === key && !switchTab ? null : key;
-  if (switchTab) state.tab = 'transits';
+  if (switchTab && !isCompareView()) state.tab = 'transits';
   renderAll();
 }
 
@@ -293,11 +383,11 @@ document.addEventListener('click', (e) => {
   if (t) {
     const inWheel = !!t.closest('#wheel');
     select(t.dataset.asp, { switchTab: inWheel });
-    if (inWheel) $('.right').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (inWheel && !isCompareView()) $('.right').scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
   const tab = e.target.closest('.tab');
-  if (tab) { state.tab = tab.dataset.tab; renderPanel(); return; }
+  if (tab) { state.tab = tab.dataset.tab; state.selected = null; renderAll(); return; }
   const f = e.target.closest('[data-filter]');
   if (f) { state.filters[f.dataset.filter] = !state.filters[f.dataset.filter]; renderPanel(); return; }
   const sh = e.target.closest('[data-shift]');
@@ -315,24 +405,37 @@ $('#now').addEventListener('click', () => { state.now = new Date(); setWhen(new 
 const dlg = $('#birth-dialog');
 const form = $('#birth-form');
 
+let editingId = null;
+
 function fillForm(p) {
+  form.elements.kind.value = p.kind || 'person';
   for (const [k, v] of Object.entries({ name: p.name, date: p.date, time: p.time, place: p.place, lat: p.lat, lon: p.lon, tz: p.tz, houseSystem: p.houseSystem ?? 'W' })) form.elements[k].value = v ?? '';
   form.elements.timeUnknown.checked = !!p.timeUnknown;
   form.elements.time.disabled = !!p.timeUnknown;
 }
 
-function openForm() {
+function openForm(mode = 'edit') {
   $('#form-error').hidden = true;
   $('#place-results').innerHTML = '';
-  fillForm(state.profile || { time: '12:00', tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+  editingId = mode === 'edit' && state.profile ? state.profile.id : null;
+  $('#form-title').textContent = editingId ? 'Edit chart' : state.profiles.length ? 'Add a chart' : 'Birth details';
+  $('#delete-profile').hidden = !editingId;
+  fillForm(editingId ? state.profile : { time: '12:00', tz: Intl.DateTimeFormat().resolvedOptions().timeZone, kind: state.profiles.length ? 'person' : 'person' });
   dlg.showModal();
 }
 
 form.elements.timeUnknown.addEventListener('change', (e) => { form.elements.time.disabled = e.target.checked; });
 $('#cancel').addEventListener('click', () => dlg.close());
 $('#example').addEventListener('click', () => fillForm(EXAMPLE));
-$('#edit-birth').addEventListener('click', openForm);
-$('#start').addEventListener('click', openForm);
+$('#edit-birth').addEventListener('click', () => openForm('edit'));
+$('#add-profile').addEventListener('click', () => openForm('add'));
+$('#start').addEventListener('click', () => openForm('add'));
+$('#delete-profile').addEventListener('click', () => {
+  if (!editingId || !confirm('Delete this chart from this browser?')) return;
+  state.profiles = state.profiles.filter((p) => p.id !== editingId);
+  dlg.close();
+  if (state.profiles.length) activate(state.profiles[0].id); else { state.activeId = null; saveStore(); showEmpty(); }
+});
 
 async function lookup() {
   const q = form.elements.place.value.trim();
@@ -365,28 +468,65 @@ form.addEventListener('submit', (e) => {
   e.preventDefault();
   const f = form.elements;
   const err = $('#form-error');
-  const profile = { name: f.name.value.trim(), date: f.date.value, time: f.time.value || '12:00', timeUnknown: f.timeUnknown.checked, place: f.place.value.trim(), lat: +f.lat.value, lon: +f.lon.value, tz: f.tz.value.trim(), houseSystem: f.houseSystem.value };
+  const profile = { id: editingId || uid(), kind: f.kind.value, name: f.name.value.trim(), date: f.date.value, time: f.time.value || '12:00', timeUnknown: f.timeUnknown.checked, place: f.place.value.trim(), lat: +f.lat.value, lon: +f.lon.value, tz: f.tz.value.trim(), houseSystem: f.houseSystem.value };
   const problem = !profile.date ? 'Enter a date of birth.'
     : !(profile.lat >= -90 && profile.lat <= 90) || !(profile.lon >= -180 && profile.lon <= 180) ? 'Latitude must be −90…90 and longitude −180…180.'
     : !isValidTimeZone(profile.tz) ? 'That time zone is not recognised. Use a name like America/New_York.' : '';
   if (problem) { err.textContent = problem; err.hidden = false; return; }
   dlg.close();
-  loadProfile(profile, { save: true });
+  const i = state.profiles.findIndex((p) => p.id === profile.id);
+  if (i >= 0) state.profiles[i] = profile; else state.profiles.push(profile);
+  activate(profile.id, { keepTab: true });
 });
 
-function loadProfile(profile, { save = false } = {}) {
-  state.profile = profile;
-  state.natal = computeNatal(profile);
+function saveStore() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ profiles: state.profiles, activeId: state.activeId, compareId: state.compareId })); } catch { /* storage unavailable */ }
+}
+
+function renderProfileControls() {
+  const sel = $('#profile-select');
+  sel.innerHTML = state.profiles.map((p) => `<option value="${p.id}" ${p.id === state.activeId ? 'selected' : ''}>${esc(nameOf(p))}</option>`).join('');
+  const others = state.profiles.filter((p) => p.id !== state.activeId);
+  if (!others.some((p) => p.id === state.compareId)) state.compareId = '';
+  $('#compare-select').innerHTML = `<option value="">None</option>` + others.map((p) => `<option value="${p.id}" ${p.id === state.compareId ? 'selected' : ''}>${esc(nameOf(p))}</option>`).join('');
+  $('.compare-switch').hidden = others.length === 0;
+  $('#compare-tab').hidden = !state.compareId;
+}
+
+function activate(id, { keepTab = false } = {}) {
+  state.activeId = id;
+  state.profile = state.profiles.find((p) => p.id === id);
+  state.natal = natalOf(state.profile);
   state.cache = {};
   state.selected = null;
   state.now = new Date();
   state.when = new Date();
-  if (save) { try { localStorage.setItem(STORE_KEY, JSON.stringify(profile)); } catch { /* storage unavailable */ } }
+  if (!keepTab && state.tab === 'compare') state.tab = 'reading';
+  saveStore();
   $('#empty').hidden = true;
   $('#main').hidden = false;
+  renderProfileControls();
   renderProfile();
   renderAll({ keepScroll: false });
 }
+
+function showEmpty() {
+  state.profile = null;
+  $('#main').hidden = true;
+  $('#empty').hidden = false;
+  $('#profile-summary').textContent = '';
+  renderProfileControls();
+}
+
+$('#profile-select').addEventListener('change', (e) => activate(e.target.value));
+$('#compare-select').addEventListener('change', (e) => {
+  state.compareId = e.target.value;
+  state.tab = state.compareId ? 'compare' : 'reading';
+  state.selected = null;
+  saveStore();
+  renderProfileControls();
+  renderAll();
+});
 
 /* ---------- boot ---------- */
 async function boot() {
@@ -400,13 +540,27 @@ async function boot() {
   }
   $('#loading').hidden = true;
 
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch { /* ignore */ }
   const params = new URLSearchParams(location.search);
-  if (params.get('demo')) saved = EXAMPLE;
   if (params.get('tab')) state.tab = params.get('tab');
-  if (saved) loadProfile(saved);
-  else $('#empty').hidden = false;
-  if (params.get('date')) setWhen(new Date(params.get('date')));
+  if (params.get('demo')) {
+    state.profiles = params.get('demo') === '2' ? [EXAMPLE, EXAMPLE2] : [EXAMPLE];
+    if (params.get('demo') === '2') state.compareId = EXAMPLE2.id;
+    activate(EXAMPLE.id, { keepTab: true });
+  } else {
+    let store = null;
+    try {
+      store = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      if (!store) {
+        const legacy = JSON.parse(localStorage.getItem(LEGACY_KEY) || 'null');
+        if (legacy) store = { profiles: [{ ...legacy, id: uid(), kind: 'person' }] };
+      }
+    } catch { /* ignore */ }
+    if (store?.profiles?.length) {
+      state.profiles = store.profiles;
+      state.compareId = store.compareId || '';
+      activate(state.profiles.some((p) => p.id === store.activeId) ? store.activeId : state.profiles[0].id, { keepTab: true });
+    } else showEmpty();
+  }
+  if (params.get('date') && state.profile) setWhen(new Date(params.get('date')));
 }
 boot();

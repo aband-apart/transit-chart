@@ -79,7 +79,7 @@ export function aspectPasses(asp, centerJd) {
  */
 export function forecast(natal, jd0, jd1, { includeMoonAspects = false, minWeightBodies } = {}) {
   const events = [];
-  const targets = ['sun', 'moon', 'asc', 'mc', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'node', 'chiron'];
+  const targets = ['sun', 'moon', 'asc', 'mc', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'node', 'chiron'].filter((k) => natal.points[k]);
   const bodies = TRANSITING.filter((b) => (includeMoonAspects || b !== 'moon') && (!minWeightBodies || minWeightBodies.includes(b)));
   const series = {};
   for (const tk of bodies) series[tk] = sample(tk, jd0, jd1);

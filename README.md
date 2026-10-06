@@ -16,7 +16,7 @@ npm test         # ephemeris, time-zone, aspect and forecast checks
 npm run build    # static site in dist/
 ```
 
-Add `?demo=1` to the URL to load an example chart.
+Add `?demo=1` to the URL to load an example chart, or `?demo=2&tab=compare` for two example charts side by side.
 
 ## What you get
 
@@ -25,6 +25,8 @@ Add `?demo=1` to the URL to load an example chart.
 - **Active transits**: every aspect currently in orb, ranked by weight.
 - **Forecast**: exact aspects, stations, sign changes, new/full moons and eclipses (mapped to your houses) for 30–365 days.
 - **Natal chart**: big three, element/modality balance, positions and house cusps.
+
+- **Multiple charts and Compare**: save people, countries/places and events/organizations, switch between them (transits to a country's chart work the same way), and pick "Compare with" for a two-chart wheel, cross-aspects, themes and house overlays. Slow outer-planet pairs are skipped because whole generations share them.
 
 Unknown birth time is supported: houses fall back to Sun-sign whole houses and Asc/MC are omitted.
 

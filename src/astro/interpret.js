@@ -242,3 +242,80 @@ export function buildReading({ natal, transit, aspects, events }) {
 }
 
 export { cap };
+
+
+// ---- Synastry text ----
+const REL = {
+  sun: 'identity and vitality', moon: 'emotional needs', mercury: 'communication', venus: 'affection and values',
+  mars: 'drive and desire', jupiter: 'growth and generosity', saturn: 'commitment and limits',
+  uranus: 'excitement and unpredictability', neptune: 'idealism and intuition', pluto: 'intensity and power',
+  chiron: 'tender spots and healing', node: 'shared direction', asc: 'first impressions', mc: 'public life and ambitions',
+};
+const SYN_VERB = {
+  conjunction: 'merges with', opposition: 'is drawn to, and polarized by,', square: 'rubs against',
+  trine: 'flows easily with', sextile: 'quietly supports',
+};
+const SYN_TONE = {
+  flowing: 'This is an easy, natural connection.',
+  challenging: 'This is a growth edge. It asks for patience and direct conversation.',
+  intense: 'This is a strong link that is hard to ignore.',
+};
+const has = (a, x, y) => (a.transit === x && a.target === y) || (a.transit === y && a.target === x);
+const involves = (a, k) => a.transit === k || a.target === k;
+
+function synFlavor(a) {
+  if (has(a, 'venus', 'mars')) return 'Venus–Mars contact is classic chemistry.';
+  if (has(a, 'sun', 'moon')) return 'Sun–Moon contact is a classic marker of compatibility.';
+  if (a.transit === 'moon' && a.target === 'moon') return 'Moon–Moon contact means you instinctively read each other\'s moods.';
+  if (involves(a, 'saturn')) return 'Saturn contacts often mean seriousness, commitment, or a feeling of being tested.';
+  if (involves(a, 'pluto')) return 'Pluto contacts are intense and transformative, with strong pull and power dynamics.';
+  if (involves(a, 'uranus')) return 'Uranus adds spark and unpredictability.';
+  if (involves(a, 'neptune')) return 'Neptune adds romance and idealization, so check what is real.';
+  if (involves(a, 'node')) return 'Node contacts feel fated or purposeful.';
+  return '';
+}
+
+export function describeSynastry(a, nameA, nameB) {
+  const A = ASPECT_TEXT[a.aspect];
+  const pa = PLANETS[a.target].name;
+  const pb = PLANETS[a.transit].name;
+  return {
+    title: `${nameB}'s ${pb} ${A.name} ${nameA}'s ${pa}`,
+    text: `${nameB}'s ${pb} (${REL[a.transit]}) ${SYN_VERB[a.aspect]} ${nameA}'s ${pa} (${REL[a.target]}). ${SYN_TONE[a.tone]} ${synFlavor(a)}`.trim(),
+  };
+}
+
+/** Overall read of how two charts relate. */
+export function compareSummary(aspects, nameA, nameB) {
+  const top = aspects.slice(0, 12);
+  const hard = top.filter((a) => a.tone !== 'flowing').reduce((s, a) => s + a.strength, 0);
+  const soft = top.filter((a) => a.tone === 'flowing').reduce((s, a) => s + a.strength, 0);
+  const ratio = hard + soft ? hard / (hard + soft) : 0.5;
+  const climate = ratio > 0.65 ? 'charged' : ratio < 0.4 ? 'harmonious' : 'balanced';
+  const climateText = {
+    charged: `${nameA} and ${nameB} meet with a lot of friction and intensity. That can read as strong attraction or repeated conflict, and it tends to push both to grow.`,
+    harmonious: `${nameA} and ${nameB} fit together with relative ease. The risk is complacency, since comfort is rarely tested.`,
+    balanced: `${nameA} and ${nameB} have a mix of ease and friction, so there is both comfort and something to work on.`,
+  }[climate];
+  const themes = [];
+  const find = (f) => aspects.find(f);
+  const rules = [
+    [(a) => has(a, 'sun', 'moon'), 'Sun–Moon link: a sense of being understood.'],
+    [(a) => has(a, 'venus', 'mars'), 'Venus–Mars link: attraction and chemistry.'],
+    [(a) => a.transit === 'moon' && a.target === 'moon', 'Moon–Moon link: shared emotional wavelength.'],
+    [(a) => has(a, 'venus', 'venus') || (a.transit === 'venus' && a.target === 'venus'), 'Venus–Venus link: shared tastes and ways of loving.'],
+    [(a) => involves(a, 'saturn') && (LUM_OR_PERSONAL.has(a.transit) || LUM_OR_PERSONAL.has(a.target)), 'A Saturn contact: lasting commitment, or a sense of limits.'],
+    [(a) => involves(a, 'pluto') && (LUM_OR_PERSONAL.has(a.transit) || LUM_OR_PERSONAL.has(a.target)), 'A Pluto contact: intensity and transformation.'],
+    [(a) => involves(a, 'asc'), 'An Ascendant contact: strong first impressions.'],
+    [(a) => involves(a, 'node'), 'A Node contact: a sense of purpose or fate.'],
+    [(a) => has(a, 'mercury', 'mercury') || (a.transit === 'mercury' && a.target === 'mercury'), 'Mercury–Mercury link: easy conversation, or crossed wires.'],
+  ];
+  for (const [f, text] of rules) {
+    const a = find(f);
+    if (a) themes.push({ text, tone: a.tone });
+  }
+  const strengths = top.filter((a) => a.tone === 'flowing').slice(0, 3).map((a) => describeSynastry(a, nameA, nameB));
+  const frictions = top.filter((a) => a.tone !== 'flowing').slice(0, 3).map((a) => describeSynastry(a, nameA, nameB));
+  return { climate, climateText, themes, strengths, frictions };
+}
+const LUM_OR_PERSONAL = new Set(['sun', 'moon', 'venus', 'mars', 'mercury', 'asc']);

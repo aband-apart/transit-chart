@@ -103,3 +103,20 @@ test('outer-planet aspects: Saturn conjunct Neptune on 20 Feb 2026', () => {
   const day = new Date((ev.jd - 2440587.5) * 86400000).toISOString().slice(0, 10);
   assert.equal(day, '2026-02-20');
 });
+
+test('synastry finds aspects between two charts', async () => {
+  const { synastryAspects } = await import('../src/astro/aspects.js');
+  const A = { sun: { lon: 100 }, moon: { lon: 200 } };
+  const B = { venus: { lon: 103 }, mars: { lon: 290 } };
+  const r = synastryAspects(B, A);
+  assert.ok(r.find((x) => x.transit === 'venus' && x.target === 'sun' && x.aspect === 'conjunction'));
+  assert.ok(r.every((x) => x.orb <= x.maxOrb));
+});
+
+test('charts before the asteroid data range still compute (without Chiron/Pallas)', () => {
+  const n = natalFromBirth({ year: 1776, month: 7, day: 4, hour: 17, minute: 10, timeZone: 'America/New_York', lat: 39.9526, lon: -75.1652 });
+  assert.equal(signIndex(n.points.sun.lon), 3); // Cancer
+  assert.equal(n.points.chiron, undefined);
+  assert.ok(n.points.moon && n.points.saturn);
+  assert.ok(forecast(n, dateToJd(Date.UTC(2026, 9, 6)), dateToJd(Date.UTC(2026, 9, 6)) + 30).length > 0);
+});

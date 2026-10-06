@@ -90,3 +90,39 @@ export function natalAspects(points, keys, orb = 6) {
   }
   return out.sort((x, y) => x.orb - y.orb);
 }
+
+// ---- Synastry (comparing two charts) ----
+const SYN_KEYS = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'chiron', 'node', 'asc', 'mc'];
+const SYN_WEIGHT = { sun: 10, moon: 10, asc: 9, venus: 8, mars: 8, mercury: 6, saturn: 6, mc: 6, jupiter: 5, node: 4, pluto: 4, uranus: 3, neptune: 3, chiron: 3 };
+const GENERATIONAL = new Set(['uranus', 'neptune', 'pluto', 'chiron']);
+const LUMINARY = new Set(['sun', 'moon', 'asc']);
+
+/**
+ * Aspects between the points of chart B (outer) and chart A (inner).
+ * Same row shape as transitAspects so the wheel and cards can reuse it.
+ */
+export function synastryAspects(pointsB, pointsA, { skipKeysA = [], skipKeysB = [] } = {}) {
+  const out = [];
+  for (const kb of SYN_KEYS) {
+    if (!pointsB[kb] || skipKeysB.includes(kb)) continue;
+    for (const ka of SYN_KEYS) {
+      if (!pointsA[ka] || skipKeysA.includes(ka)) continue;
+      // slow outer-planet pairs are shared by a whole generation, so they say little about two charts
+      if (GENERATIONAL.has(kb) && GENERATIONAL.has(ka)) continue;
+      const base = LUMINARY.has(kb) || LUMINARY.has(ka) ? 8 : 6;
+      const sep = Math.abs(angDiff(pointsB[kb].lon, pointsA[ka].lon));
+      for (const asp of ASPECTS) {
+        const maxOrb = base * asp.orbMul;
+        const orb = Math.abs(sep - asp.angle);
+        if (orb > maxOrb) continue;
+        out.push({
+          transit: kb, target: ka, aspect: asp.key, angle: asp.angle, glyph: asp.glyph, tone: asp.tone,
+          orb, maxOrb, applying: false, retro: false,
+          strength: SYN_WEIGHT[kb] * SYN_WEIGHT[ka] * asp.weight * (1 - (orb / maxOrb) * 0.8),
+          transitLon: pointsB[kb].lon, targetLon: pointsA[ka].lon,
+        });
+      }
+    }
+  }
+  return out.sort((a, b) => b.strength - a.strength);
+}

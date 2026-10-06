@@ -53,7 +53,7 @@ function declutter(items, minSep) {
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-export function renderWheel({ natal, transit, aspects, selected }) {
+export function renderWheel({ natal, transit, aspects, selected, outerLabel = 'Transiting', innerLabel = 'Natal' }) {
   // Whole Sign charts start the 1st house at 9 o'clock (the Ascendant is drawn inside it); otherwise the Ascendant sits there.
   const asc = natal.houseSystem === 'W' ? natal.cusps[0] : natal.asc;
   let svg = `<svg viewBox="-28 -28 816 816" class="wheel" role="img" aria-label="Natal chart with transiting planets">`;
@@ -135,7 +135,7 @@ export function renderWheel({ natal, transit, aspects, selected }) {
     svg += `<line x1="${tx}" y1="${ty}" x2="${tx2}" y2="${ty2}" class="w-natal-tick"/>`;
     const [gx, gy] = pt(it.disp, R.natalGlyph, asc);
     const [dx, dy] = pt(it.disp, R.natalDeg, asc);
-    svg += `<g class="w-natal"><text x="${gx}" y="${gy}" text-anchor="middle" dominant-baseline="central" class="w-glyph">${PLANETS[it.key].glyph}${VS}<title>Natal ${PLANETS[it.key].name} ${(p.lon % 30).toFixed(1)}° ${SIGNS[p.sign].name}</title></text>`;
+    svg += `<g class="w-natal"><text x="${gx}" y="${gy}" text-anchor="middle" dominant-baseline="central" class="w-glyph">${PLANETS[it.key].glyph}${VS}<title>${esc(innerLabel)} ${PLANETS[it.key].name} ${(p.lon % 30).toFixed(1)}° ${SIGNS[p.sign].name}</title></text>`;
     svg += `<text x="${dx}" y="${dy}" text-anchor="middle" dominant-baseline="central" class="w-deg">${Math.floor(p.lon % 30)}°${p.retro ? 'ʀ' : ''}</text></g>`;
   }
 
@@ -148,7 +148,7 @@ export function renderWheel({ natal, transit, aspects, selected }) {
     svg += `<line x1="${tx}" y1="${ty}" x2="${tx2}" y2="${ty2}" class="w-transit-tick"/>`;
     const [gx, gy] = pt(it.disp, R.transitGlyph, asc);
     const [dx, dy] = pt(it.disp, R.transitDeg, asc);
-    svg += `<g class="w-transit"><text x="${gx}" y="${gy}" text-anchor="middle" dominant-baseline="central" class="w-glyph w-tglyph">${PLANETS[it.key].glyph}${VS}<title>Transiting ${PLANETS[it.key].name} ${(p.lon % 30).toFixed(1)}° ${SIGNS[p.sign].name}${p.retro ? ' (retrograde)' : ''}</title></text>`;
+    svg += `<g class="w-transit"><text x="${gx}" y="${gy}" text-anchor="middle" dominant-baseline="central" class="w-glyph w-tglyph">${PLANETS[it.key].glyph}${VS}<title>${esc(outerLabel)} ${PLANETS[it.key].name} ${(p.lon % 30).toFixed(1)}° ${SIGNS[p.sign].name}${p.retro ? ' (retrograde)' : ''}</title></text>`;
     svg += `<text x="${dx}" y="${dy}" text-anchor="middle" dominant-baseline="central" class="w-deg w-tdeg">${Math.floor(p.lon % 30)}°${p.retro ? 'ʀ' : ''}</text></g>`;
   }
 

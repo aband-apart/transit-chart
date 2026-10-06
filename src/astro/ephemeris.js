@@ -47,9 +47,18 @@ export function lonAt(key, jd) {
   return norm360(swe.calc_ut(jd, BY_KEY[key].swe, FLAGS)[0]);
 }
 
+// Asteroid-based bodies need extra data files that only cover some dates; skip them outside that range.
+const OPTIONAL = new Set(['chiron', 'pallas']);
+
 export function allBodiesAt(jd) {
   const out = {};
-  for (const b of BODIES) out[b.key] = bodyAt(b.key, jd);
+  for (const b of BODIES) {
+    try {
+      out[b.key] = bodyAt(b.key, jd);
+    } catch (err) {
+      if (!OPTIONAL.has(b.key)) throw err;
+    }
+  }
   return out;
 }
 
