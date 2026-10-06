@@ -13,6 +13,36 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const house = (n) => HOUSES[n - 1];
 const sign = (i) => SIGNS[i];
 
+// ---- Voice: render second-person text in the chart's own name ----
+let SUBJECT = null; // null = speak to the reader ("you/your")
+
+export function setSubject(name) {
+  SUBJECT = name ? String(name).trim() : null;
+}
+
+// Words after which "you" is an object ("with you", "mirror you") rather than a subject ("you need").
+const OBJECT_CUES = 'with|around|mirror|mirrors|see|sees|for|to|asks|ask|tests|test|calls|call|pulls|pull|pushes|push|helps|help|hit|hits|gives|give|tells|tell|makes|make|lets|about|toward|towards|of|at|like|than|from|by|on|upon|into|onto|beyond|behind|near|needs';
+const OBJECT_RE = new RegExp(`\\b(${OBJECT_CUES})(\\s+)you\\b`, 'gi');
+
+/** Possessive form of the subject name, e.g. "Alex's" or "Chris'". */
+export const possessive = () => (SUBJECT ? (/s$/i.test(SUBJECT) ? `${SUBJECT}'` : `${SUBJECT}'s`) : 'your');
+
+/** Rewrite "you/your" in generated text to match the subject's name. No-op when there is no name. */
+export function voice(text) {
+  if (!SUBJECT || !text) return text;
+  const poss = possessive();
+  return text
+    .replace(/\bYour\b/g, poss)
+    .replace(/\byour\b/g, poss)
+    .replace(/\byourself\b/g, 'themselves')
+    .replace(/\bYou're\b/g, "They're")
+    .replace(/\byou're\b/g, "they're")
+    .replace(/\byou've\b/g, "they've")
+    .replace(OBJECT_RE, (_, cue, sp) => `${cue}${sp}them`)
+    .replace(/\bYou\b/g, 'They')
+    .replace(/\byou\b/g, 'they');
+}
+
 export const natalLabel = (k) => (k === 'asc' || k === 'mc' || k === 'dsc' || k === 'ic' ? PLANETS[k].name : `natal ${PLANETS[k].name}`);
 export const planetName = (k) => PLANETS[k].name;
 
@@ -54,9 +84,9 @@ export function describeAspect(a, natal) {
   const hard = a.tone !== 'flowing';
   return {
     title: `${P.name} ${A.name} ${natalLabel(a.target)}`,
-    text: parts.join(' '),
-    note: A.note,
-    pace: P.pace,
+    text: voice(parts.join(' ')),
+    note: voice(A.note),
+    pace: voice(P.pace),
     tip: hard ? P.hardTip : P.softTip,
     avoid: hard ? P.avoid : null,
     timing: a.applying ? 'approaching exact' : 'easing off for now',
@@ -64,7 +94,7 @@ export function describeAspect(a, natal) {
 }
 
 /** Short narrative for one forecast event. */
-export function describeEvent(ev, natal) {
+function describeEventRaw(ev, natal) {
   if (ev.type === 'aspect') {
     const P = PLANETS[ev.transit];
     const T = TARGETS[ev.target];
@@ -116,6 +146,11 @@ export function describeEvent(ev, natal) {
   return { title: '', text: '' };
 }
 
+export function describeEvent(ev, natal) {
+  const r = describeEventRaw(ev, natal);
+  return { ...r, text: voice(r.text) };
+}
+
 /** What the sky is doing right now, in plain terms. */
 export function skyToday(natal, transit) {
   const moon = transit.points.moon;
@@ -130,7 +165,7 @@ export function skyToday(natal, transit) {
     moonSign: SIGN_NAMES[signIndex(moon.lon)],
     moonHouse: moon.house,
     sunSign: SIGN_NAMES[signIndex(sun.lon)],
-    text: `The ${phase.name} is in ${SIGN_NAMES[signIndex(moon.lon)]}, moving through your ${ordinal(mh)} house of ${house(mh).label}. Emotional attention gravitates toward ${house(mh).theme}.`,
+    text: voice(`The ${phase.name} is in ${SIGN_NAMES[signIndex(moon.lon)]}, moving through your ${ordinal(mh)} house of ${house(mh).label}. Emotional attention gravitates toward ${house(mh).theme}.`),
     retros,
   };
 }
@@ -148,7 +183,7 @@ export function natalPortrait(natal) {
   const top = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]);
   const ascRuler = S('asc').ruler.toLowerCase();
   const rulerPoint = p[ascRuler];
-  return {
+  const out = {
     sun: `Sun in ${S('sun').name} (${ordinal(p.sun.house)} house) is ${S('sun').sun}.`,
     moon: `Moon in ${S('moon').name} (${ordinal(p.moon.house)} house) ${S('moon').moon}.`,
     rising: `${S('asc').name} Rising ${S('asc').rising}.`,
@@ -159,6 +194,8 @@ export function natalPortrait(natal) {
       ? `Your chart ruler is ${PLANETS[ascRuler].name}, placed in ${S(ascRuler).name} in the ${ordinal(rulerPoint.house)} house. That is where your life tends to organize itself.`
       : '',
   };
+  for (const k of ['sun', 'moon', 'rising', 'dominant', 'ruler']) out[k] = voice(out[k]);
+  return out;
 }
 
 const TOP_N = 8;
@@ -204,7 +241,7 @@ export function buildReading({ natal, transit, aspects, events }) {
       title: `${P.name} in ${SIGN_NAMES[t.sign]}${t.retro ? ' (retrograde)' : ''}`,
       house: t.house,
       world: PLANET_WORLD[k] ? collective(k, t.sign) : '',
-      text: `${P.name} ${P.inHouse} your ${ordinal(t.house)} house of ${h.label}. For the length of this transit, ${P.principle} are central to ${h.theme}.${t.retro && P.retro ? ' ' + P.retro : ''}`,
+      text: voice(`${P.name} ${P.inHouse} your ${ordinal(t.house)} house of ${h.label}. For the length of this transit, ${P.principle} are central to ${h.theme}.${t.retro && P.retro ? ' ' + P.retro : ''}`),
     };
   });
 
@@ -232,8 +269,8 @@ export function buildReading({ natal, transit, aspects, events }) {
   return {
     headline,
     climate,
-    climateText,
-    focusText,
+    climateText: voice(climateText),
+    focusText: voice(focusText),
     focusHouses,
     seasons,
     tips: { do: doTips.slice(0, 4), avoid: avoidTips.slice(0, 3) },

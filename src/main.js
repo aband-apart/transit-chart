@@ -4,7 +4,7 @@ import { natalFromBirth, buildChart, formatPos, houseOf, withSolarHouses, HOUSE_
 import { transitAspects, synastryAspects } from './astro/aspects.js';
 import { forecast, aspectPasses, outerAspects } from './astro/transits.js';
 import { isValidTimeZone } from './astro/time.js';
-import { describeAspect, describeEvent, buildReading, skyToday, natalPortrait, natalLabel, ordinal, describeSynastry, compareSummary } from './astro/interpret.js';
+import { describeAspect, describeEvent, buildReading, skyToday, natalPortrait, natalLabel, ordinal, describeSynastry, compareSummary, setSubject, voice, possessive } from './astro/interpret.js';
 import { PLANETS, SIGNS, HOUSES, PLACEMENT_LINE } from './data/astro-data.js';
 import { renderWheel } from './ui/wheel.js';
 
@@ -123,7 +123,7 @@ function renderWheelView() {
   const { transit, aspects } = current();
   $('#wheel').innerHTML = renderWheel({ natal: state.natal, transit, aspects, selected: state.selected });
   $('#legend-outer').textContent = 'Outer ring: transiting planets';
-  $('#legend-inner').textContent = `Inner ring: ${state.profile.kind === 'person' ? 'your' : nameOf(state.profile) + "'s"} natal chart`;
+  $('#legend-inner').textContent = `Inner ring: ${possessive()} natal chart`;
 }
 
 function aspectKey(a) {
@@ -193,21 +193,21 @@ function readingView() {
   const when = state.when.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
   return `
-    ${state.natal.timeUnknown ? '<div class="banner">Birth time unknown: houses are calculated from your Sun sign and angles (Asc/MC) are left out.</div>' : ''}
+    ${state.natal.timeUnknown ? `<div class="banner">${esc(voice('Birth time unknown: houses are calculated from your Sun sign and angles (Asc/MC) are left out.'))}</div>` : ''}
     <section class="card lead">
       <div class="eyebrow">${esc(when)}</div>
       <h2>${esc(reading.headline)}</h2>
       <p>${esc(reading.climateText)} ${esc(reading.focusText)}</p>
       <div class="sky">
         <span><b>${esc(sky.phase)}</b> in ${esc(sky.moonSign)}</span>
-        <span>Moon in your <b>${ordinal(sky.moonHouse)} house</b></span>
+        <span>Moon in ${esc(possessive())} <b>${ordinal(sky.moonHouse)} house</b></span>
         <span>Sun in <b>${esc(sky.sunSign)}</b></span>
         ${sky.retros.length ? `<span>Retrograde: <b>${esc(sky.retros.join(', '))}</b></span>` : '<span>No planets retrograde</span>'}
       </div>
     </section>
 
-    <h3 class="section-title">What's touching your chart</h3>
-    ${top.length ? top.map((a) => aspectCard(a, jd)).join('') : '<p class="muted">No tight transits to your natal chart right now, a quiet window.</p>'}
+    <h3 class="section-title">${esc(voice("What's touching your chart"))}</h3>
+    ${top.length ? top.map((a) => aspectCard(a, jd)).join('') : `<p class="muted">${esc(voice('No tight transits to your natal chart right now, a quiet window.'))}</p>`}
 
     <h3 class="section-title">Do and mind</h3>
     <div class="two">
@@ -215,7 +215,7 @@ function readingView() {
       <div class="card"><div class="eyebrow">Watch out for</div><ul class="plain">${reading.tips.avoid.length ? reading.tips.avoid.map((t) => `<li>${esc(t.text)}<span class="src">${esc(t.source)}</span></li>`).join('') : '<li class="muted">Nothing pressing, and this is a good window to move forward.</li>'}</ul></div>
     </div>
 
-    <h3 class="section-title">The long game: slow planets in your houses</h3>
+    <h3 class="section-title">${esc(voice('The long game: slow planets in your houses'))}</h3>
     ${reading.seasons.map((s) => `<div class="card"><h3>${esc(s.title)} · ${ordinal(s.house)} house</h3><p style="margin:0">${esc(s.text)}</p>${s.world ? `<p class="muted" style="margin:8px 0 0"><b>In the world:</b> ${esc(s.world)}</p>` : ''}</div>`).join('')}
 
     <h3 class="section-title">The world calendar: next 12 months</h3>
@@ -281,15 +281,15 @@ function natalView() {
   }).join('');
   const bar = (list) => list.map(([k, v]) => `<span>${esc(k)}</span><div class="bar"><i style="width:${v * 10}%"></i></div><span>${v}</span>`).join('');
   return `
-    ${n.timeUnknown ? '<div class="banner">Birth time unknown: Rising sign and angles are omitted, and houses use your Sun sign as the 1st house.</div>' : ''}
+    ${n.timeUnknown ? `<div class="banner">${esc(voice('Birth time unknown: Rising sign and angles are omitted, and houses use your Sun sign as the 1st house.'))}</div>` : ''}
     ${missing.length ? `<div class="banner">${missing.map((k) => PLANETS[k].name).join(' and ')} can't be calculated for this date (the bundled asteroid data does not reach this far back).</div>` : ''}
-    <div class="card"><div class="eyebrow">Your signature</div><div class="big3">
+    <div class="card"><div class="eyebrow">${esc(voice('Your signature'))}</div><div class="big3">
       <p><b>${esc(port.sun)}</b></p><p><b>${esc(port.moon)}</b></p>${n.timeUnknown ? '' : `<p><b>${esc(port.rising)}</b></p>`}
       <p class="muted">${esc(port.dominant)} ${n.timeUnknown ? '' : esc(port.ruler)}</p></div></div>
     <div class="two"><div class="card"><div class="eyebrow">Elements</div><div class="elbars">${bar(port.elements)}</div></div>
     <div class="card"><div class="eyebrow">Modalities</div><div class="elbars">${bar(port.modalities)}</div></div></div>
-    <h3 class="section-title">Your placements</h3>
-    ${keys.map((k) => { const p = n.points[k]; const h = HOUSES[p.house - 1]; return `<div class="card place"><h3>${g(k)}${esc(PLANETS[k].name)} in ${esc(SIGNS[p.sign].name)}${p.retro && !['node', 'southnode'].includes(k) ? ' ℞' : ''} · ${ordinal(p.house)} house</h3><p class="muted" style="margin:2px 0 0">${esc(PLACEMENT_LINE[k])}, expressed through ${esc(h.theme)}.</p></div>`; }).join('')}
+    <h3 class="section-title">${esc(voice('Your placements'))}</h3>
+    ${keys.map((k) => { const p = n.points[k]; const h = HOUSES[p.house - 1]; return `<div class="card place"><h3>${g(k)}${esc(PLANETS[k].name)} in ${esc(SIGNS[p.sign].name)}${p.retro && !['node', 'southnode'].includes(k) ? ' ℞' : ''} · ${ordinal(p.house)} house</h3><p class="muted" style="margin:2px 0 0">${esc(voice(`${PLACEMENT_LINE[k]}, expressed through ${h.theme}.`))}</p></div>`; }).join('')}
     <h3 class="section-title">Positions</h3>
     <div class="card"><table><thead><tr><th>Body</th><th>Sign</th><th>Position</th><th>House</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${n.timeUnknown ? '' : `<h3 class="section-title">House cusps (${HOUSE_SYSTEMS[n.houseSystem] ?? 'Placidus'})</h3>
@@ -496,6 +496,7 @@ function renderProfileControls() {
 function activate(id, { keepTab = false } = {}) {
   state.activeId = id;
   state.profile = state.profiles.find((p) => p.id === id);
+  setSubject(state.profile.name || (state.profile.kind === 'person' ? '' : 'this chart'));
   state.natal = natalOf(state.profile);
   state.cache = {};
   state.selected = null;
