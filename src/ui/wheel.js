@@ -54,7 +54,8 @@ function declutter(items, minSep) {
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
 export function renderWheel({ natal, transit, aspects, selected }) {
-  const asc = natal.asc;
+  // Whole Sign charts start the 1st house at 9 o'clock (the Ascendant is drawn inside it); otherwise the Ascendant sits there.
+  const asc = natal.houseSystem === 'W' ? natal.cusps[0] : natal.asc;
   let svg = `<svg viewBox="-28 -28 816 816" class="wheel" role="img" aria-label="Natal chart with transiting planets">`;
   svg += `<defs>
     <radialGradient id="bg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="var(--wheel-core)"/><stop offset="100%" stop-color="var(--wheel-edge)"/></radialGradient>
