@@ -1,0 +1,21 @@
+{
+  "name": "transit-chart",
+  "version": "0.1.0",
+  "description": "Local astrology transit viewer: natal chart bi-wheel, transits, forecast and guidance.",
+  "scripts": {
+    "predev": "node scripts/copy-wasm.mjs",
+    "dev": "vite",
+    "prebuild": "node scripts/copy-wasm.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "swisseph-wasm": "^0.1.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.3"
+  },
+  "private": true,
+  "type": "module"
+}
