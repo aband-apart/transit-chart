@@ -6,8 +6,11 @@ Everything runs in your browser. Positions come from the Swiss Ephemeris (compil
 
 ## Run it
 
+The page must be served over http. Opening `index.html` directly (a `file://` address) won't work, because browsers block ES modules and the WebAssembly fetch there.
+
 ```bash
 npm install
+npm start        # build, serve and open the browser
 npm run dev      # http://localhost:5173
 npm test         # ephemeris, time-zone, aspect and forecast checks
 npm run build    # static site in dist/
