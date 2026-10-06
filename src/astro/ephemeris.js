@@ -14,7 +14,8 @@ export const BODIES = [
   { key: 'pluto', swe: 9 },
   { key: 'chiron', swe: 15 },
   { key: 'node', swe: 11 }, // true north node
-  { key: 'lilith', swe: 12 }, // mean black moon
+  { key: 'lilith', swe: 13 }, // osculating (true) black moon, can be retrograde
+  { key: 'pallas', swe: 18 },
 ];
 
 const BY_KEY = Object.fromEntries(BODIES.map((b) => [b.key, b]));

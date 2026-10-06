@@ -190,7 +190,9 @@ export const PLANETS = {
     retro: null,
     inHouse: 'is touching tender ground in' },
   node: { name: 'North Node', glyph: '☊', principle: 'life direction' },
+  southnode: { name: 'South Node', glyph: '☋', principle: 'past patterns' },
   lilith: { name: 'Black Moon Lilith', glyph: '⚸', principle: 'raw instinct' },
+  pallas: { name: 'Pallas Athena', glyph: '⚴', principle: 'strategy and pattern recognition' },
   asc: { name: 'Ascendant', glyph: 'Asc', principle: 'self-presentation' },
   mc: { name: 'Midheaven', glyph: 'MC', principle: 'career direction' },
   dsc: { name: 'Descendant', glyph: 'Dsc', principle: 'partnership' },
@@ -228,4 +230,27 @@ export const LUNATION = {
   full: 'A Full Moon is a culmination, and things around this theme come to light or peak:',
   newEclipse: 'A solar eclipse is a powerful reset. Expect a significant new beginning or redirect around',
   fullEclipse: 'A lunar eclipse is an intense culmination. Something ends or surfaces around',
+};
+
+// One-line description of what each placement shows, used in the natal "Placements" list.
+export const PLACEMENT_LINE = {
+  sun: 'Your core identity and what makes you shine',
+  moon: 'Your emotional needs, instincts and what soothes you',
+  mercury: 'How you think, learn and communicate',
+  venus: 'How you love, connect and what you value',
+  mars: 'How you act, assert yourself and pursue desire',
+  jupiter: 'How you grow, find faith and attract abundance',
+  saturn: 'Where you build discipline, structure and boundaries',
+  uranus: 'Where you rebel, innovate and break the pattern',
+  neptune: 'Where you dream, idealize and dissolve boundaries',
+  pluto: 'Where you hold deep power and go through transformation',
+  chiron: 'Where you carry an old wound and offer healing',
+  node: 'The direction your growth is pulling you',
+  southnode: 'What feels familiar and is ready to be released',
+  lilith: 'Where you refuse to be tamed or edited',
+  pallas: 'How you strategize and spot patterns',
+  asc: 'How you meet the world and your motivation for living',
+  mc: 'Your public image and vocation',
+  ic: 'Your roots, ancestry and sense of home',
+  dsc: 'Your committed partnerships and who you attract',
 };

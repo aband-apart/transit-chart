@@ -5,7 +5,7 @@ import { transitAspects } from './astro/aspects.js';
 import { forecast, aspectPasses } from './astro/transits.js';
 import { isValidTimeZone } from './astro/time.js';
 import { describeAspect, describeEvent, buildReading, skyToday, natalPortrait, natalLabel, ordinal } from './astro/interpret.js';
-import { PLANETS, SIGNS, HOUSES } from './data/astro-data.js';
+import { PLANETS, SIGNS, HOUSES, PLACEMENT_LINE } from './data/astro-data.js';
 import { renderWheel } from './ui/wheel.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -225,11 +225,11 @@ function forecastView() {
 function natalView() {
   const n = state.natal;
   const port = natalPortrait(n);
-  const keys = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'chiron', 'node', 'lilith'];
-  if (!n.timeUnknown) keys.push('asc', 'mc');
+  const keys = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'chiron', 'node', 'southnode', 'lilith', 'pallas'];
+  if (!n.timeUnknown) keys.push('asc', 'mc', 'ic', 'dsc');
   const rows = keys.map((k) => {
     const p = n.points[k];
-    return `<tr><td>${g(k)}${esc(PLANETS[k].name)}</td><td>${sg(p.sign)}${esc(SIGNS[p.sign].name)}</td><td>${formatPos(p.lon, { withSign: false })}${p.retro ? ' ℞' : ''}</td><td>${['asc', 'mc'].includes(k) ? '' : ordinal(p.house)}</td></tr>`;
+    return `<tr><td>${g(k)}${esc(PLANETS[k].name)}</td><td>${sg(p.sign)}${esc(SIGNS[p.sign].name)}</td><td>${formatPos(p.lon, { withSign: false })}${p.retro ? ' ℞' : ''}</td><td>${ordinal(p.house)}</td></tr>`;
   }).join('');
   const bar = (list) => list.map(([k, v]) => `<span>${esc(k)}</span><div class="bar"><i style="width:${v * 10}%"></i></div><span>${v}</span>`).join('');
   return `
@@ -239,6 +239,8 @@ function natalView() {
       <p class="muted">${esc(port.dominant)} ${n.timeUnknown ? '' : esc(port.ruler)}</p></div></div>
     <div class="two"><div class="card"><div class="eyebrow">Elements</div><div class="elbars">${bar(port.elements)}</div></div>
     <div class="card"><div class="eyebrow">Modalities</div><div class="elbars">${bar(port.modalities)}</div></div></div>
+    <h3 class="section-title">Your placements</h3>
+    ${keys.map((k) => { const p = n.points[k]; const h = HOUSES[p.house - 1]; return `<div class="card place"><h3>${g(k)}${esc(PLANETS[k].name)} in ${esc(SIGNS[p.sign].name)}${p.retro && !['node', 'southnode'].includes(k) ? ' ℞' : ''} · ${ordinal(p.house)} house</h3><p class="muted" style="margin:2px 0 0">${esc(PLACEMENT_LINE[k])}, expressed through ${esc(h.theme)}.</p></div>`; }).join('')}
     <h3 class="section-title">Positions</h3>
     <div class="card"><table><thead><tr><th>Body</th><th>Sign</th><th>Position</th><th>House</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${n.timeUnknown ? '' : `<h3 class="section-title">House cusps (${HOUSE_SYSTEMS[n.houseSystem] ?? 'Placidus'})</h3>

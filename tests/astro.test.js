@@ -88,3 +88,9 @@ test('house systems: Whole Sign counts houses from the Rising sign', () => {
   assert.ok(whole.cusps.every((c, i) => c === ((6 + i) % 12) * 30));
   assert.equal(whole.asc, placidus.asc); // angles don't depend on house system
 });
+
+test('natal chart includes South Node, true Lilith and Pallas', () => {
+  const n = natalFromBirth({ year: 1990, month: 7, day: 4, hour: 14, minute: 30, timeZone: 'America/New_York', lat: 40.7128, lon: -74.006 });
+  assert.ok(Math.abs(angDiff(n.points.southnode.lon, n.points.node.lon + 180)) < 1e-9);
+  for (const k of ['lilith', 'pallas', 'ic', 'dsc']) assert.ok(Number.isFinite(n.points[k].lon), k);
+});

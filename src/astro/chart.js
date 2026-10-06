@@ -45,6 +45,7 @@ export function buildChart({ jd, lat, lon, houseSystem = 'P' }) {
   for (const [key, b] of Object.entries(bodies)) points[key] = decorate(b.lon, b.speed, cusps);
   points.asc = decorate(asc, 0, cusps);
   points.mc = decorate(mc, 0, cusps);
+  points.southnode = decorate(norm360(points.node.lon + 180), points.node.speed, cusps);
   points.dsc = decorate(norm360(asc + 180), 0, cusps);
   points.ic = decorate(norm360(mc + 180), 0, cusps);
   return { jd, lat, lon, cusps, asc, mc, points, houseSystem };
