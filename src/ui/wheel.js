@@ -89,14 +89,20 @@ export function renderWheel({ natal, transit, aspects, selected }) {
   const cusps = natal.cusps;
   for (let i = 0; i < 12; i++) {
     const c = cusps[i];
-    const axis = i === 0 || i === 3 || i === 6 || i === 9;
     const [x1, y1] = pt(c, R.houseOuter, asc);
     const [x2, y2] = pt(c, R.houseInner, asc);
-    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="${axis ? 'w-axis' : 'w-house'}"/>`;
+    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="w-house"/>`;
     const next = cusps[(i + 1) % 12];
     const mid = norm360(c + norm360(next - c) / 2);
     const [nx, ny] = pt(mid, R.houseNum, asc);
     svg += `<text x="${nx}" y="${ny}" class="w-hnum" text-anchor="middle" dominant-baseline="central">${i + 1}</text>`;
+  }
+  if (!natal.timeUnknown) {
+    for (const lon of [natal.asc, natal.asc + 180, natal.mc, natal.mc + 180]) {
+      const [x1, y1] = pt(lon, R.houseOuter, asc);
+      const [x2, y2] = pt(lon, R.houseInner, asc);
+      svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="w-axis"/>`;
+    }
   }
   svg += `<circle cx="${C}" cy="${C}" r="${R.houseInner}" class="w-line"/>`;
   svg += `<circle cx="${C}" cy="${C}" r="${R.aspect}" class="w-line w-core"/>`;

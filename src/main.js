@@ -1,6 +1,6 @@
 import './style.css';
 import { initEphemeris, dateToJd, jdToDate } from './astro/ephemeris.js';
-import { natalFromBirth, buildChart, formatPos, houseOf, withSolarHouses } from './astro/chart.js';
+import { natalFromBirth, buildChart, formatPos, houseOf, withSolarHouses, HOUSE_SYSTEMS } from './astro/chart.js';
 import { transitAspects } from './astro/aspects.js';
 import { forecast, aspectPasses } from './astro/transits.js';
 import { isValidTimeZone } from './astro/time.js';
@@ -42,7 +42,7 @@ const toneLabel = { challenging: 'Challenging', flowing: 'Flowing', intense: 'Co
 function computeNatal(profile) {
   const [year, month, day] = profile.date.split('-').map(Number);
   const [hour, minute] = (profile.timeUnknown ? '12:00' : profile.time || '12:00').split(':').map(Number);
-  let natal = natalFromBirth({ year, month, day, hour, minute, timeZone: profile.tz, lat: +profile.lat, lon: +profile.lon });
+  let natal = natalFromBirth({ year, month, day, hour, minute, timeZone: profile.tz, lat: +profile.lat, lon: +profile.lon, houseSystem: profile.houseSystem ?? 'W' });
   if (profile.timeUnknown) natal = withSolarHouses(natal);
   natal.timeUnknown = !!profile.timeUnknown;
   return natal;
@@ -241,7 +241,7 @@ function natalView() {
     <div class="card"><div class="eyebrow">Modalities</div><div class="elbars">${bar(port.modalities)}</div></div></div>
     <h3 class="section-title">Positions</h3>
     <div class="card"><table><thead><tr><th>Body</th><th>Sign</th><th>Position</th><th>House</th></tr></thead><tbody>${rows}</tbody></table></div>
-    ${n.timeUnknown ? '' : `<h3 class="section-title">House cusps (Placidus)</h3>
+    ${n.timeUnknown ? '' : `<h3 class="section-title">House cusps (${HOUSE_SYSTEMS[n.houseSystem] ?? 'Placidus'})</h3>
     <div class="card"><table><thead><tr><th>House</th><th>Theme</th><th>Cusp</th></tr></thead><tbody>${HOUSES.map((h, i) => `<tr><td>${h.n}</td><td>${esc(h.label)}</td><td>${formatPos(n.cusps[i])}</td></tr>`).join('')}</tbody></table></div>`}`;
 }
 
@@ -307,7 +307,7 @@ const dlg = $('#birth-dialog');
 const form = $('#birth-form');
 
 function fillForm(p) {
-  for (const [k, v] of Object.entries({ name: p.name, date: p.date, time: p.time, place: p.place, lat: p.lat, lon: p.lon, tz: p.tz })) form.elements[k].value = v ?? '';
+  for (const [k, v] of Object.entries({ name: p.name, date: p.date, time: p.time, place: p.place, lat: p.lat, lon: p.lon, tz: p.tz, houseSystem: p.houseSystem ?? 'W' })) form.elements[k].value = v ?? '';
   form.elements.timeUnknown.checked = !!p.timeUnknown;
   form.elements.time.disabled = !!p.timeUnknown;
 }
@@ -356,7 +356,7 @@ form.addEventListener('submit', (e) => {
   e.preventDefault();
   const f = form.elements;
   const err = $('#form-error');
-  const profile = { name: f.name.value.trim(), date: f.date.value, time: f.time.value || '12:00', timeUnknown: f.timeUnknown.checked, place: f.place.value.trim(), lat: +f.lat.value, lon: +f.lon.value, tz: f.tz.value.trim() };
+  const profile = { name: f.name.value.trim(), date: f.date.value, time: f.time.value || '12:00', timeUnknown: f.timeUnknown.checked, place: f.place.value.trim(), lat: +f.lat.value, lon: +f.lon.value, tz: f.tz.value.trim(), houseSystem: f.houseSystem.value };
   const problem = !profile.date ? 'Enter a date of birth.'
     : !(profile.lat >= -90 && profile.lat <= 90) || !(profile.lon >= -180 && profile.lon <= 180) ? 'Latitude must be −90…90 and longitude −180…180.'
     : !isValidTimeZone(profile.tz) ? 'That time zone is not recognised. Use a name like America/New_York.' : '';

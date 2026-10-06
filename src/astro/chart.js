@@ -31,23 +31,29 @@ function decorate(lon, speed, cusps) {
   };
 }
 
+export const HOUSE_SYSTEMS = { W: 'Whole Sign', P: 'Placidus', E: 'Equal' };
+
 /** Compute a full chart for a UTC instant at a place. */
-export function buildChart({ jd, lat, lon }) {
+export function buildChart({ jd, lat, lon, houseSystem = 'P' }) {
   const bodies = allBodiesAt(jd);
-  const { cusps, asc, mc } = housesAt(jd, lat, lon);
+  const h = housesAt(jd, lat, lon);
+  const { asc, mc } = h;
+  let cusps = h.cusps;
+  if (houseSystem === 'W') cusps = Array.from({ length: 12 }, (_, i) => ((signIndex(asc) + i) % 12) * 30);
+  if (houseSystem === 'E') cusps = Array.from({ length: 12 }, (_, i) => norm360(asc + i * 30));
   const points = {};
   for (const [key, b] of Object.entries(bodies)) points[key] = decorate(b.lon, b.speed, cusps);
   points.asc = decorate(asc, 0, cusps);
   points.mc = decorate(mc, 0, cusps);
   points.dsc = decorate(norm360(asc + 180), 0, cusps);
   points.ic = decorate(norm360(mc + 180), 0, cusps);
-  return { jd, lat, lon, cusps, asc, mc, points };
+  return { jd, lat, lon, cusps, asc, mc, points, houseSystem };
 }
 
 /** Natal chart from birth data (local time + IANA zone). */
-export function natalFromBirth({ year, month, day, hour, minute, timeZone, lat, lon }) {
+export function natalFromBirth({ year, month, day, hour, minute, timeZone, lat, lon, houseSystem = 'P' }) {
   const ms = localToUtcMs({ year, month, day, hour, minute }, timeZone);
-  return { ...buildChart({ jd: dateToJd(ms), lat, lon }), utcMs: ms };
+  return { ...buildChart({ jd: dateToJd(ms), lat, lon, houseSystem }), utcMs: ms };
 }
 
 /** Where a transiting longitude falls in the natal house system. */

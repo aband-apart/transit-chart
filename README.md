@@ -20,7 +20,7 @@ Add `?demo=1` to the URL to load an example chart.
 
 ## What you get
 
-- **Bi-wheel**: natal chart inside (Placidus houses, tropical zodiac), transiting planets outside, aspect lines coloured by tone. Click a line to read it. Scrub ±1 year to watch transits move.
+- **Bi-wheel**: natal chart inside (Whole Sign by default, with Placidus or Equal selectable, tropical zodiac), transiting planets outside, aspect lines coloured by tone. Click a line to read it. Scrub ±1 year to watch transits move.
 - **Reading**: the overall climate, the strongest transits with exact dates and retrograde re-passes, slow planets by house, and do / mind tips.
 - **Active transits**: every aspect currently in orb, ranked by weight.
 - **Forecast**: exact aspects, stations, sign changes, new/full moons and eclipses (mapped to your houses) for 30–365 days.

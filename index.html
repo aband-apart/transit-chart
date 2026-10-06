@@ -80,6 +80,13 @@
           <label>Time zone<input name="tz" type="text" list="tzlist" required placeholder="America/New_York" /></label>
         </div>
         <datalist id="tzlist"></datalist>
+        <label>House system
+          <select name="houseSystem">
+            <option value="W">Whole Sign (each sign is a house; Rising sign = 1st house)</option>
+            <option value="P">Placidus (most common in Western software)</option>
+            <option value="E">Equal (30° from the Ascendant)</option>
+          </select>
+        </label>
         <p id="form-error" class="error" hidden></p>
         <div class="actions">
           <button type="button" id="example" class="btn ghost">Use an example</button>

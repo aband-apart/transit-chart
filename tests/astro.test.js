@@ -77,3 +77,14 @@ test('forecast contains lunations ~29.5 days apart and is sorted', () => {
   assert.ok(Math.abs(news[1].jd - news[0].jd - 29.5) < 1);
   for (let i = 1; i < ev.length; i++) assert.ok(ev[i].jd >= ev[i - 1].jd);
 });
+
+test('house systems: Whole Sign counts houses from the Rising sign', () => {
+  const birth = { year: 1990, month: 7, day: 4, hour: 14, minute: 30, timeZone: 'America/New_York', lat: 40.7128, lon: -74.006 };
+  const placidus = natalFromBirth({ ...birth, houseSystem: 'P' });
+  const whole = natalFromBirth({ ...birth, houseSystem: 'W' });
+  // Libra rising, Sun in Cancer: Cancer is the 10th sign from Libra
+  assert.equal(whole.points.sun.house, 10);
+  assert.equal(placidus.points.sun.house, 9);
+  assert.ok(whole.cusps.every((c, i) => c === ((6 + i) % 12) * 30));
+  assert.equal(whole.asc, placidus.asc); // angles don't depend on house system
+});
