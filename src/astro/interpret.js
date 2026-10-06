@@ -1,6 +1,7 @@
 import { SIGNS, HOUSES, PLANETS, TARGETS, ASPECT_TEXT, LUNATION } from '../data/astro-data.js';
 import { SIGN_NAMES, signIndex } from './chart.js';
 import { moonPhase } from './transits.js';
+import { SIGN_WORLD, PLANET_WORLD, WORLD_OVERRIDE } from '../data/mundane.js';
 
 export const ordinal = (n) => {
   const s = ['th', 'st', 'nd', 'rd'];
@@ -14,6 +15,22 @@ const sign = (i) => SIGNS[i];
 
 export const natalLabel = (k) => (k === 'asc' || k === 'mc' || k === 'dsc' || k === 'ic' ? PLANETS[k].name : `natal ${PLANETS[k].name}`);
 export const planetName = (k) => PLANETS[k].name;
+
+/** Collective (world-level) reading of a slow planet in a sign. */
+export function collective(planetKey, signIdx) {
+  const o = WORLD_OVERRIDE[`${planetKey}:${signIdx}`];
+  if (o) return o;
+  const P = PLANET_WORLD[planetKey];
+  return P ? `${P.verb} ${SIGN_WORLD[signIdx]}.` : '';
+}
+
+const OUTER_PHRASE = {
+  conjunction: (a, b) => `${cap(a)} and ${b} merge into the start of a new cycle.`,
+  opposition: (a, b) => `${cap(a)} and ${b} are pulled into open tension and polarization.`,
+  square: (a, b) => `Friction between ${a} and ${b} forces action and change.`,
+  trine: (a, b) => `${cap(a)} and ${b} support each other, and progress comes more easily.`,
+  sextile: (a, b) => `An opening appears between ${a} and ${b}, rewarding those who act on it.`,
+};
 
 /** Narrative for one active transit-to-natal aspect. */
 export function describeAspect(a, natal) {
@@ -65,7 +82,8 @@ export function describeEvent(ev, natal) {
     const text = ev.direction === 'retrograde'
       ? `${P.name} slows to a stop and turns retrograde in ${where}. ${P.retro ?? 'Its themes turn inward and call for review.'}`
       : `${P.name} turns direct in ${where}. Clarity returns and the stalled themes of ${P.principle} start moving forward again.`;
-    return { title: `${P.name} stations ${ev.direction}`, text };
+    const world = PLANET_WORLD[ev.transit] ? ` In the world: ${collective(ev.transit, ev.sign)}` : '';
+    return { title: `${P.name} stations ${ev.direction}`, text: text + world };
   }
   if (ev.type === 'ingress') {
     const P = PLANETS[ev.transit];
@@ -73,7 +91,7 @@ export function describeEvent(ev, natal) {
     const re = ev.retro ? ' (backing into the sign while retrograde)' : '';
     return {
       title: `${P.name} enters ${SIGN_NAMES[ev.sign]}`,
-      text: `${P.name}${re} moves into ${SIGN_NAMES[ev.sign]}, bringing its focus on ${P.principle} into your ${ordinal(ev.house)} house of ${h.label} (${h.theme}).`,
+      text: `${P.name}${re} moves into ${SIGN_NAMES[ev.sign]}, bringing its focus on ${P.principle} into your ${ordinal(ev.house)} house of ${h.label} (${h.theme}).${PLANET_WORLD[ev.transit] ? ' In the world: ' + collective(ev.transit, ev.sign) : ''}`,
     };
   }
   if (ev.type === 'lunation') {
@@ -82,7 +100,17 @@ export function describeEvent(ev, natal) {
     const name = ev.eclipse ? (ev.phase === 'new' ? 'Solar Eclipse' : 'Lunar Eclipse') : ev.phase === 'new' ? 'New Moon' : 'Full Moon';
     return {
       title: `${name} in ${SIGN_NAMES[ev.sign]}`,
-      text: `${LUNATION[kind]} ${h.theme}, in your ${ordinal(ev.house)} house.`,
+      text: `${LUNATION[kind]} ${h.theme}, in your ${ordinal(ev.house)} house.${ev.eclipse ? ' In the world: eclipses tend to spotlight ' + SIGN_WORLD[ev.sign] + '.' : ''}`,
+    };
+  }
+  if (ev.type === 'outer') {
+    const A = PLANETS[ev.a];
+    const B = PLANETS[ev.b];
+    const asp = ASPECT_TEXT[ev.aspect];
+    const phrase = OUTER_PHRASE[ev.aspect](PLANET_WORLD[ev.a].domain, PLANET_WORLD[ev.b].domain);
+    return {
+      title: `${A.name} ${asp.name} ${B.name}`,
+      text: `${phrase} This is one of the slow, generation-defining cycles. Moving through ${SIGN_NAMES[ev.signA]} and ${SIGN_NAMES[ev.signB]}, it touches your ${ordinal(ev.houseA)} house (${house(ev.houseA).label}) and ${ordinal(ev.houseB)} house (${house(ev.houseB).label}).`,
     };
   }
   return { title: '', text: '' };
@@ -175,6 +203,7 @@ export function buildReading({ natal, transit, aspects, events }) {
       key: k,
       title: `${P.name} in ${SIGN_NAMES[t.sign]}${t.retro ? ' (retrograde)' : ''}`,
       house: t.house,
+      world: PLANET_WORLD[k] ? collective(k, t.sign) : '',
       text: `${P.name} ${P.inHouse} your ${ordinal(t.house)} house of ${h.label}. For the length of this transit, ${P.principle} are central to ${h.theme}.${t.retro && P.retro ? ' ' + P.retro : ''}`,
     };
   });

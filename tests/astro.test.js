@@ -4,7 +4,7 @@ import { initEphemeris, dateToJd, lonAt } from '../src/astro/ephemeris.js';
 import { natalFromBirth, houseOf, signIndex } from '../src/astro/chart.js';
 import { localToUtcMs } from '../src/astro/time.js';
 import { angDiff, transitAspects } from '../src/astro/aspects.js';
-import { forecast, aspectPasses } from '../src/astro/transits.js';
+import { forecast, aspectPasses, outerAspects } from '../src/astro/transits.js';
 
 await initEphemeris();
 
@@ -93,4 +93,13 @@ test('natal chart includes South Node, true Lilith and Pallas', () => {
   const n = natalFromBirth({ year: 1990, month: 7, day: 4, hour: 14, minute: 30, timeZone: 'America/New_York', lat: 40.7128, lon: -74.006 });
   assert.ok(Math.abs(angDiff(n.points.southnode.lon, n.points.node.lon + 180)) < 1e-9);
   for (const k of ['lilith', 'pallas', 'ic', 'dsc']) assert.ok(Number.isFinite(n.points[k].lon), k);
+});
+
+test('outer-planet aspects: Saturn conjunct Neptune on 20 Feb 2026', () => {
+  const n = natalFromBirth({ year: 1990, month: 7, day: 4, hour: 14, minute: 30, timeZone: 'America/New_York', lat: 40.7128, lon: -74.006 });
+  const jd = dateToJd(Date.UTC(2025, 11, 1));
+  const ev = outerAspects(n, jd, jd + 365).find((e) => e.a === 'saturn' && e.b === 'neptune' && e.aspect === 'conjunction');
+  assert.ok(ev, 'conjunction found');
+  const day = new Date((ev.jd - 2440587.5) * 86400000).toISOString().slice(0, 10);
+  assert.equal(day, '2026-02-20');
 });

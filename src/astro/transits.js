@@ -180,6 +180,53 @@ export function forecast(natal, jd0, jd1, { includeMoonAspects = false, minWeigh
   return events.sort((a, b) => a.jd - b.jd);
 }
 
+const OUTERS = ['jupiter', 'saturn', 'uranus', 'neptune', 'pluto'];
+
+/** Exact aspects between the slow planets themselves (the big collective cycles). */
+export function outerAspects(natal, jd0, jd1) {
+  const events = [];
+  // All planets share one grid so paired samples line up.
+  const STEP_OUTER = 2;
+  const n = Math.ceil((jd1 - jd0) / STEP_OUTER) + 1;
+  const jds = Float64Array.from({ length: n }, (_, i) => jd0 + i * STEP_OUTER);
+  const series = {};
+  for (const k of OUTERS) series[k] = { jds, lons: Float64Array.from(jds, (jd) => lonAt(k, jd)) };
+  const sepAt = (a, b, jd) => norm360(lonAt(a, jd) - lonAt(b, jd));
+  const GOALS = [[0, 0], [60, 60], [300, 60], [90, 90], [270, 90], [120, 120], [240, 120], [180, 180]];
+  for (let i = 0; i < OUTERS.length; i++) {
+    for (let j = i + 1; j < OUTERS.length; j++) {
+      const a = OUTERS[i];
+      const b = OUTERS[j];
+      for (const [goal, angle] of GOALS) {
+        let prev = angDiff(norm360(series[a].lons[0] - series[b].lons[0]), goal);
+        for (let k = 1; k < series[a].jds.length; k++) {
+          const cur = angDiff(norm360(series[a].lons[k] - series[b].lons[k]), goal);
+          if (Math.sign(prev) !== Math.sign(cur) && Math.abs(prev) < 45 && Math.abs(cur) < 45) {
+            let lo = series[a].jds[k - 1];
+            let hi = series[a].jds[k];
+            const sign0 = Math.sign(prev);
+            for (let n = 0; n < 28; n++) {
+              const m = (lo + hi) / 2;
+              if (Math.sign(angDiff(sepAt(a, b, m), goal)) === sign0) lo = m; else hi = m;
+            }
+            const jd = (lo + hi) / 2;
+            const la = lonAt(a, jd);
+            const lb = lonAt(b, jd);
+            events.push({
+              type: 'outer', jd, a, b, angle, aspect: ASPECTS.find((x) => x.angle === angle).key,
+              glyph: ASPECTS.find((x) => x.angle === angle).glyph, tone: ASPECTS.find((x) => x.angle === angle).tone,
+              signA: signIndex(la), signB: signIndex(lb),
+              houseA: natalHouseFor(natal, la), houseB: natalHouseFor(natal, lb),
+            });
+          }
+          prev = cur;
+        }
+      }
+    }
+  }
+  return events.sort((x, y) => x.jd - y.jd);
+}
+
 export { jdToDate };
 
 /** Moon phase name and illumination-ish description at a JD. */

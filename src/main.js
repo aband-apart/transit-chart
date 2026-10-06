@@ -2,7 +2,7 @@ import './style.css';
 import { initEphemeris, dateToJd, jdToDate } from './astro/ephemeris.js';
 import { natalFromBirth, buildChart, formatPos, houseOf, withSolarHouses, HOUSE_SYSTEMS } from './astro/chart.js';
 import { transitAspects } from './astro/aspects.js';
-import { forecast, aspectPasses } from './astro/transits.js';
+import { forecast, aspectPasses, outerAspects } from './astro/transits.js';
 import { isValidTimeZone } from './astro/time.js';
 import { describeAspect, describeEvent, buildReading, skyToday, natalPortrait, natalLabel, ordinal } from './astro/interpret.js';
 import { PLANETS, SIGNS, HOUSES, PLACEMENT_LINE } from './data/astro-data.js';
@@ -23,7 +23,7 @@ const state = {
   tab: 'reading',
   selected: null,
   forecastDays: 90,
-  filters: { aspect: true, station: true, ingress: true, lunation: true, minor: false },
+  filters: { aspect: true, station: true, ingress: true, lunation: true, outer: true, minor: false },
   cache: {},
 };
 
@@ -65,11 +65,11 @@ const houseFor = (lon) => houseOf(lon, state.natal.cusps);
 
 function getForecast(jd, days) {
   const key = `${Math.floor(jd)}:${days}:${state.natal.jd}`;
-  if (state.cache.fkey === key) return state.cache.fdata;
-  let events = forecast(state.natal, jd, jd + days);
+  state.cache.f ??= {};
+  if (state.cache.f[key]) return state.cache.f[key];
+  let events = [...forecast(state.natal, jd, jd + days), ...outerAspects(state.natal, jd, jd + days)].sort((a, b) => a.jd - b.jd);
   if (state.natal.timeUnknown) events = events.filter((e) => !(e.type === 'aspect' && ['asc', 'mc'].includes(e.target)));
-  state.cache.fkey = key;
-  state.cache.fdata = events;
+  state.cache.f[key] = events;
   return events;
 }
 
@@ -125,12 +125,13 @@ function eventGlyph(e) {
   if (e.type === 'aspect') return `${g(e.transit)}<span class="g">${e.glyph}${VS}</span>${g(e.target)}`;
   if (e.type === 'station') return `${g(e.transit)}<span class="g">${e.direction === 'retrograde' ? '℞' : 'D'}</span>`;
   if (e.type === 'ingress') return `${g(e.transit)}${sg(e.sign)}`;
+  if (e.type === 'outer') return `${g(e.a)}<span class="g">${e.glyph}${VS}</span>${g(e.b)}`;
   if (e.type === 'lunation') return `<span class="g">${e.eclipse ? '◉' : e.phase === 'new' ? '●' : '○'}</span>${sg(e.sign)}`;
   return '';
 }
 const SLOW = ['saturn', 'jupiter', 'uranus', 'neptune', 'pluto', 'chiron'];
 const isMinor = (e) => e.type === 'aspect' && ['sun', 'mercury', 'venus', 'mars'].includes(e.transit) && !['sun', 'moon', 'asc', 'mc'].includes(e.target);
-const isBig = (e) => e.eclipse || (SLOW.includes(e.transit) && e.type !== 'ingress') || (e.type === 'ingress' && SLOW.includes(e.transit));
+const isBig = (e) => e.type === 'outer' || e.eclipse || (SLOW.includes(e.transit) && e.type !== 'ingress') || (e.type === 'ingress' && SLOW.includes(e.transit));
 
 function eventRow(e) {
   const d = describeEvent(e, state.natal);
@@ -148,6 +149,8 @@ function readingView() {
   const sky = skyToday(state.natal, transit);
   const top = aspects.slice(0, 5);
   const upcoming = reading.upcoming.filter((e) => e.type !== 'ingress' || SLOW.includes(e.transit) || e.transit === 'mars').slice(0, 10);
+  const OUT = ['jupiter', 'saturn', 'uranus', 'neptune', 'pluto'];
+  const worldCal = getForecast(jd, 365).filter((e) => e.type === 'outer' || (e.type === 'lunation' && e.eclipse) || (e.type === 'ingress' && OUT.includes(e.transit)) || (e.type === 'station' && OUT.includes(e.transit))).slice(0, 12);
   const when = state.when.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
   return `
@@ -174,7 +177,11 @@ function readingView() {
     </div>
 
     <h3 class="section-title">The long game: slow planets in your houses</h3>
-    ${reading.seasons.map((s) => `<div class="card"><h3>${esc(s.title)} · ${ordinal(s.house)} house</h3><p style="margin:0">${esc(s.text)}</p></div>`).join('')}
+    ${reading.seasons.map((s) => `<div class="card"><h3>${esc(s.title)} · ${ordinal(s.house)} house</h3><p style="margin:0">${esc(s.text)}</p>${s.world ? `<p class="muted" style="margin:8px 0 0"><b>In the world:</b> ${esc(s.world)}</p>` : ''}</div>`).join('')}
+
+    <h3 class="section-title">The world calendar: next 12 months</h3>
+    <div class="card">${worldCal.length ? worldCal.map(eventRow).join('') : '<p class="muted">No major collective turning points ahead.</p>'}
+    <p class="muted small" style="margin:12px 0 0">Collective themes are interpretive, a way to read the mood of an era rather than forecast specific headlines.</p></div>
 
     <h3 class="section-title">What's coming in the next 60 days</h3>
     <div class="card">${upcoming.length ? upcoming.map(eventRow).join('') : '<p class="muted">Nothing major on the calendar.</p>'}
@@ -208,7 +215,7 @@ function transitsView() {
 function forecastView() {
   const { jd } = current();
   const events = getForecast(jd, state.forecastDays).filter((e) => state.filters[e.type] && (state.filters.minor || !isMinor(e)));
-  const chips = [['aspect', 'Exact aspects'], ['station', 'Stations'], ['ingress', 'Sign changes'], ['lunation', 'New & full moons'], ['minor', 'Minor fast-planet aspects']]
+  const chips = [['aspect', 'Exact aspects'], ['station', 'Stations'], ['ingress', 'Sign changes'], ['lunation', 'New & full moons'], ['outer', 'World cycles'], ['minor', 'Minor fast-planet aspects']]
     .map(([k, l]) => `<span class="chip ${state.filters[k] ? 'on' : ''}" data-filter="${k}">${l}</span>`).join('');
   let html = `<div class="filters">${chips}
     <select id="fdays">${[30, 90, 180, 365].map((d) => `<option value="${d}" ${d === state.forecastDays ? 'selected' : ''}>Next ${d} days</option>`).join('')}</select></div>`;
