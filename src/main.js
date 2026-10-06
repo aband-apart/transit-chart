@@ -21,6 +21,7 @@ const EXAMPLE = { id: 'ex1', kind: 'person', name: 'Example chart', date: '1990-
 const EXAMPLE2 = { id: 'ex2', kind: 'place', name: 'United States (example)', date: '1776-07-04', time: '17:10', timeUnknown: false, place: 'Philadelphia, United States', lat: 39.9526, lon: -75.1652, tz: 'America/New_York' };
 
 const state = {
+  demo: false,
   profiles: [],
   activeId: null,
   compareId: '',
@@ -480,6 +481,7 @@ form.addEventListener('submit', (e) => {
 });
 
 function saveStore() {
+  if (state.demo) return; // demo links never touch saved charts
   try { localStorage.setItem(STORE_KEY, JSON.stringify({ profiles: state.profiles, activeId: state.activeId, compareId: state.compareId })); } catch { /* storage unavailable */ }
 }
 
@@ -544,6 +546,7 @@ async function boot() {
   const params = new URLSearchParams(location.search);
   if (params.get('tab')) state.tab = params.get('tab');
   if (params.get('demo')) {
+    state.demo = true;
     state.profiles = params.get('demo') === '2' ? [EXAMPLE, EXAMPLE2] : [EXAMPLE];
     if (params.get('demo') === '2') state.compareId = EXAMPLE2.id;
     activate(EXAMPLE.id, { keepTab: true });
