@@ -1,5 +1,6 @@
 import { SIGNS, PLANETS } from '../data/astro-data.js';
 import { norm360 } from '../astro/ephemeris.js';
+import { highlight } from './selection.js';
 
 const C = 380; // center
 const R = {
@@ -53,10 +54,10 @@ function declutter(items, minSep) {
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-export function renderWheel({ natal, transit, aspects, selected, outerLabel = 'Transiting', innerLabel = 'Natal', compact = false }) {
+export function renderWheel({ natal, transit, aspects, selection = null, outerLabel = 'Transiting', innerLabel = 'Natal', compact = false }) {
   // Whole Sign charts start the 1st house at 9 o'clock (the Ascendant is drawn inside it); otherwise the Ascendant sits there.
   const asc = natal.houseSystem === 'W' ? natal.cusps[0] : natal.asc;
-  let svg = `<svg viewBox="-28 -28 816 816" class="wheel${compact ? ' compact' : ''}" role="img" aria-label="Natal chart with transiting planets">`;
+  let svg = `<svg viewBox="-28 -28 816 816" class="wheel${compact ? ' compact' : ''}" role="group" aria-label="Chart wheel. Select a planet or a line to read it.">`;
   svg += `<defs>
     <radialGradient id="bg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="var(--wheel-core)"/><stop offset="100%" stop-color="var(--wheel-edge)"/></radialGradient>
   </defs>`;
@@ -117,14 +118,18 @@ export function renderWheel({ natal, transit, aspects, selected, outerLabel = 'T
 
   // aspect lines (transit -> natal), drawn under the planets
   const shown = aspects.filter((a) => NATAL_SHOWN.concat(['asc', 'mc']).includes(a.target) && TRANSIT_SHOWN.includes(a.transit));
-  shown.forEach((a, idx) => {
+  const hl = highlight(shown, selection);
+  shown.forEach((a) => {
     const [x1, y1] = pt(a.transitLon, R.aspect, asc);
     const [x2, y2] = pt(a.targetLon, R.aspect, asc);
+    const key = `${a.transit}-${a.aspect}-${a.target}`;
     const tight = a.orb < 1;
-    const sel = selected === `${a.transit}-${a.aspect}-${a.target}`;
-    const cls = `asp asp-${a.tone}${sel ? ' sel' : ''}${selected && !sel ? ' dim' : ''}`;
-    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="asp-hit" data-asp="${a.transit}-${a.aspect}-${a.target}"/>`;
-    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="${cls}" stroke-width="${tight ? 2.4 : 1.4}" data-asp="${a.transit}-${a.aspect}-${a.target}" style="opacity:${sel ? 1 : Math.min(0.95, 0.35 + a.strength / 400)}"><title>${esc(PLANETS[a.transit].name)} ${a.aspect} ${esc(PLANETS[a.target].name)} (orb ${a.orb.toFixed(1)}°)</title></line>`;
+    const primary = hl.primaryLine === key;
+    const related = hl.lines.has(key);
+    const cls = `asp asp-${a.tone}${primary ? ' sel' : related ? ' rel' : ''}${hl.active && !related ? ' dim' : ''}`;
+    const label = `${PLANETS[a.transit].name} ${a.aspect} ${PLANETS[a.target].name}, orb ${a.orb.toFixed(1)} degrees`;
+    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="asp-hit" data-asp="${key}" role="button" tabindex="0" aria-label="${esc(label)}"/>`;
+    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="${cls}" stroke-width="${tight ? 2.4 : 1.4}" data-asp="${key}" style="opacity:${primary || related ? 1 : Math.min(0.95, 0.35 + a.strength / 400)}"><title>${esc(PLANETS[a.transit].name)} ${a.aspect} ${esc(PLANETS[a.target].name)} (orb ${a.orb.toFixed(1)}°)</title></line>`;
   });
 
   // natal planets (inner band)
@@ -136,7 +141,8 @@ export function renderWheel({ natal, transit, aspects, selected, outerLabel = 'T
     svg += `<line x1="${tx}" y1="${ty}" x2="${tx2}" y2="${ty2}" class="w-natal-tick"/>`;
     const [gx, gy] = pt(it.disp, R.natalGlyph, asc);
     const [dx, dy] = pt(it.disp, R.natalDeg, asc);
-    svg += `<g class="w-natal"><text x="${gx}" y="${gy}" text-anchor="middle" dominant-baseline="central" class="w-glyph">${PLANETS[it.key].glyph}${VS}<title>${esc(innerLabel)} ${PLANETS[it.key].name} ${(p.lon % 30).toFixed(1)}° ${SIGNS[p.sign].name}</title></text>`;
+    const nCls = `w-natal pl${hl.natal.has(it.key) ? ' hl' : ''}${hl.active && !hl.natal.has(it.key) ? ' dimmed' : ''}`;
+    svg += `<g class="${nCls}" data-pl="natal:${it.key}" role="button" tabindex="0" aria-label="${esc(innerLabel)} ${PLANETS[it.key].name} in ${SIGNS[p.sign].name}"><circle class="pl-hit" cx="${gx}" cy="${gy}" r="${compact ? 36 : 24}"/><text x="${gx}" y="${gy}" text-anchor="middle" dominant-baseline="central" class="w-glyph">${PLANETS[it.key].glyph}${VS}<title>${esc(innerLabel)} ${PLANETS[it.key].name} ${(p.lon % 30).toFixed(1)}° ${SIGNS[p.sign].name}</title></text>`;
     svg += `<text x="${dx}" y="${dy}" text-anchor="middle" dominant-baseline="central" class="w-deg">${Math.floor(p.lon % 30)}°${p.retro ? 'ʀ' : ''}</text></g>`;
   }
 
@@ -149,7 +155,8 @@ export function renderWheel({ natal, transit, aspects, selected, outerLabel = 'T
     svg += `<line x1="${tx}" y1="${ty}" x2="${tx2}" y2="${ty2}" class="w-transit-tick"/>`;
     const [gx, gy] = pt(it.disp, R.transitGlyph, asc);
     const [dx, dy] = pt(it.disp, R.transitDeg, asc);
-    svg += `<g class="w-transit"><text x="${gx}" y="${gy}" text-anchor="middle" dominant-baseline="central" class="w-glyph w-tglyph">${PLANETS[it.key].glyph}${VS}<title>${esc(outerLabel)} ${PLANETS[it.key].name} ${(p.lon % 30).toFixed(1)}° ${SIGNS[p.sign].name}${p.retro ? ' (retrograde)' : ''}</title></text>`;
+    const tCls = `w-transit pl${hl.transit.has(it.key) ? ' hl' : ''}${hl.active && !hl.transit.has(it.key) ? ' dimmed' : ''}`;
+    svg += `<g class="${tCls}" data-pl="transit:${it.key}" role="button" tabindex="0" aria-label="${esc(outerLabel)} ${PLANETS[it.key].name} in ${SIGNS[p.sign].name}${p.retro ? ', retrograde' : ''}"><circle class="pl-hit" cx="${gx}" cy="${gy}" r="${compact ? 36 : 24}"/><text x="${gx}" y="${gy}" text-anchor="middle" dominant-baseline="central" class="w-glyph w-tglyph">${PLANETS[it.key].glyph}${VS}<title>${esc(outerLabel)} ${PLANETS[it.key].name} ${(p.lon % 30).toFixed(1)}° ${SIGNS[p.sign].name}${p.retro ? ' (retrograde)' : ''}</title></text>`;
     svg += `<text x="${dx}" y="${dy}" text-anchor="middle" dominant-baseline="central" class="w-deg w-tdeg">${Math.floor(p.lon % 30)}°${p.retro ? 'ʀ' : ''}</text></g>`;
   }
 

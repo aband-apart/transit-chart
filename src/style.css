@@ -246,7 +246,12 @@ details.sec > .sec-body { margin-top: 10px; }
   /* one view at a time, bottom navigation */
   .layout { display: block; padding: 8px 12px calc(88px + env(safe-area-inset-bottom)); }
   .left { display: none; position: static; }
-  body[data-tab="wheel"] .left, body[data-tab="compare"] .left { display: block; }
+  body[data-tab="wheel"] .left, body[data-tab="compare"] .left { display: flex; flex-direction: column; }
+  .left .wheel-wrap { order: 1; }
+  .left .timebar { order: 2; margin-top: 10px; }
+  .left .legend { order: 3; }
+  .left .guide-btn { order: 4; }
+  .left .wheel-detail { order: 5; }
   body[data-tab="compare"] .left { margin-bottom: 12px; }
   body[data-tab="wheel"] #panel { display: none; }
   .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; margin: 0; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0; overflow: visible; background: #0a0a1cf2; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--line); }
@@ -267,18 +272,6 @@ details.sec > .sec-body { margin-top: 10px; }
   .wheel.compact .asp { stroke-width: 2.4; }
   .wheel.compact .asp-hit { stroke-width: 26; }
   .legend { font-size: 12px; gap: 4px 12px; margin: 10px 0 8px; }
-
-  /* time controls */
-  .timebar { padding: 12px; }
-  .timebar-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-  .timebar-row #when { grid-column: 1 / -1; order: -1; width: 100%; min-height: 46px; font-size: 16px; }
-  .timebar-row .btn { min-height: 44px; padding: 0; }
-  .timebar-row #now { grid-column: 3; grid-row: 2; }
-  .timebar-row [data-shift="-7"] { grid-column: 1; grid-row: 2; }
-  .timebar-row [data-shift="-1"] { grid-column: 2; grid-row: 2; }
-  .timebar-row [data-shift="1"] { grid-column: 4; grid-row: 2; }
-  .timebar-row [data-shift="7"] { grid-column: 5; grid-row: 2; }
-  .timebar input[type="range"] { height: 32px; margin: 10px 0 0; }
 
   /* touch-size controls; 16px inputs prevent the iOS focus-zoom */
   .btn { min-height: 44px; }
@@ -312,8 +305,6 @@ details.sec > .sec-body { margin-top: 10px; }
   dialog input[type="text"], dialog input[type="date"], dialog input[type="time"], dialog input[type="number"], dialog select { min-height: 46px; }
   .actions { flex-wrap: wrap; position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom)); background: var(--panel); padding: 12px 0 4px; }
   .actions .btn { flex: 1 1 auto; }
-  .empty { margin: 8vh auto; }
-  .empty h1 { font-size: 28px; }
 }
 
 @media (max-width: 760px) and (orientation: landscape) {
@@ -346,3 +337,111 @@ details.sec > .sec-body { margin-top: 10px; }
 .status { padding: 8px 12px; border-radius: 10px; background: #5fd6c61a; border: 1px solid #5fd6c655; color: var(--flow); font-size: 14px; margin: 8px 0; }
 .status.error { background: #ff7b7b14; border-color: #ff7b7b55; color: var(--hard); }
 @media (max-width: 760px) { .manage-actions .btn { flex: 1 1 auto; justify-content: center; } }
+
+/* ---------- landing ---------- */
+.landing { max-width: 1040px; margin: 0 auto; padding: 28px 24px 56px; display: grid; grid-template-columns: minmax(280px, 460px) 1fr; gap: 40px; align-items: center; }
+.landing[hidden] { display: none; }
+.landing-wheel { cursor: pointer; border-radius: 50%; background: var(--bg2); border: 1px solid var(--line); box-shadow: 0 0 80px #4b3fa533; aspect-ratio: 1; transition: transform .25s ease, box-shadow .25s ease; }
+.landing-wheel:hover, .landing-wheel:focus-visible { transform: scale(1.015); box-shadow: 0 0 100px #6a58d055; }
+.landing-wheel .wheel { pointer-events: none; }
+.landing h1 { font-size: 36px; line-height: 1.15; margin-bottom: 14px; }
+.landing p { color: var(--muted); }
+.landing-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 18px; }
+.landing .privacy { font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; }
+.demo-banner { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 8px 16px; background: #e6c36a1a; border-bottom: 1px solid #e6c36a40; color: var(--gold); font-size: 14px; flex-wrap: wrap; }
+.demo-banner[hidden] { display: none; }
+
+/* before a chart exists, and in the example, hide controls that have nothing to act on */
+body.no-chart .profile-controls, body.no-chart .profile-summary { display: none; }
+body.demo #add-profile, body.demo #edit-birth, body.demo #manage-profiles, body.demo .compare-switch { display: none; }
+
+/* ---------- date navigator ---------- */
+.datenav { display: flex; align-items: center; gap: 8px; }
+.datenav .btn.icon { font-size: 24px; min-width: 44px; min-height: 44px; padding: 0; }
+.datelabel { flex: 1; text-align: center; line-height: 1.25; min-width: 0; }
+.datelabel strong { display: block; font-family: var(--serif); font-size: 19px; font-weight: 600; }
+.datelabel span { display: block; color: var(--muted); font-size: 13px; }
+.timeadjust { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.timeadjust > summary { cursor: pointer; color: var(--gold); font-size: 14px; padding: 6px 0; list-style: none; display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.timeadjust > summary::-webkit-details-marker { display: none; }
+.timeadjust > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--gold-dim); border-bottom: 2px solid var(--gold-dim); transform: rotate(-45deg); transition: transform .15s; }
+.timeadjust[open] > summary::before { transform: rotate(45deg); }
+.timeadjust .timebar-row { margin-top: 6px; }
+
+/* ---------- selection on the wheel ---------- */
+.pl { cursor: pointer; transition: opacity .2s ease; outline: none; }
+.pl-hit { fill: transparent; stroke: none; pointer-events: all; }
+.pl.dimmed { opacity: .28; }
+.pl .w-glyph { transition: fill .2s ease; }
+.pl.hl .w-glyph { fill: #fff; paint-order: stroke; stroke: var(--gold); stroke-width: 1.2px; }
+.pl:focus-visible .pl-hit, .asp-hit:focus-visible { stroke: var(--gold); stroke-width: 2; }
+.pl:focus-visible .pl-hit { fill: #e6c36a22; }
+.asp.rel { stroke-width: 2.6; }
+.asp { transition: opacity .2s ease, stroke-width .2s ease; }
+.linkish { background: none; border: none; color: var(--gold); font: inherit; cursor: pointer; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; min-height: 32px; }
+.guide-btn { display: block; margin: 0 auto 8px; font-size: 13.5px; }
+
+/* detail card + tappable aspect list under the wheel */
+.wheel-detail > * { animation: rise .22s ease both; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.pcard h3 { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pcard .g { font-size: 22px; }
+.arow { list-style: none; margin: 8px 0 0; padding: 0; }
+.arow li { border-top: 1px solid #23234a; }
+.arow button { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 4px; min-height: 44px; cursor: pointer; font-size: 14.5px; color: var(--ink); }
+.arow button:hover, .arow button:focus-visible { background: #1c1c3d; }
+.arow button.on { background: #24244d; box-shadow: inset 3px 0 var(--gold); }
+.arow .glyphs { font-family: var(--glyphs); color: var(--gold); min-width: 74px; font-size: 17px; }
+.arow .t { flex: 1; }
+.arow .orb { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.arow .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.arow .dot.challenging { background: var(--hard); } .arow .dot.flowing { background: var(--flow); } .arow .dot.intense { background: var(--intense); }
+.alist-title { font-family: var(--serif); font-size: 17px; margin: 14px 0 0; }
+
+/* ---------- guide ---------- */
+dialog .guide h2 { margin-bottom: 8px; }
+.guide h3 { font-size: 16px; margin: 16px 0 6px; color: var(--gold); }
+.guide p, .guide li { font-size: 14.5px; color: var(--ink); }
+.guide ul { padding-left: 18px; margin: 6px 0; }
+.glossary { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 4px 12px; margin: 6px 0; font-size: 14px; }
+.glossary span { white-space: nowrap; }
+.glossary .g { font-size: 18px; margin-right: 6px; }
+
+/* ---------- guided form ---------- */
+.stepno { margin: 0; color: var(--gold); font-size: 12.5px; text-transform: uppercase; letter-spacing: .1em; font-weight: 600; }
+.stepbar { display: flex; gap: 6px; margin: 8px 0 12px; }
+.stepbar i { flex: 1; height: 4px; border-radius: 2px; background: var(--line); transition: background .2s ease; }
+.stepbar i.on { background: var(--gold); }
+.chosen { margin: 10px 0 0; padding: 9px 12px; border-radius: 10px; background: #5fd6c61a; border: 1px solid #5fd6c655; color: var(--flow); font-size: 14px; }
+.review { margin: 0 0 8px; }
+.review > div { display: flex; align-items: baseline; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.review dt { width: 56px; color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: .08em; flex: none; }
+.review dd { margin: 0; flex: 1; font-size: 15px; }
+.advanced { margin: 12px 0 4px; border: 1px solid var(--line); border-radius: 12px; padding: 4px 12px 10px; }
+.advanced > summary { cursor: pointer; color: var(--gold); padding: 8px 0; min-height: 36px; font-size: 14px; }
+.privacy-line { margin-top: 12px; }
+dialog .actions { flex-wrap: wrap; }
+
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.tab:focus-visible, .btn:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+@media (max-width: 860px) {
+  .landing { grid-template-columns: 1fr; gap: 18px; padding: 8px 16px calc(32px + env(safe-area-inset-bottom)); text-align: center; }
+  .landing-wheel { max-width: 340px; margin: 0 auto; }
+  .landing h1 { font-size: 28px; }
+  .landing-actions { justify-content: center; flex-direction: column; }
+  .landing-actions .btn { width: 100%; justify-content: center; }
+}
+@media (max-width: 760px) {
+  .timebar { padding: 12px; }
+  .timeadjust .timebar-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .timeadjust .timebar-row #when { grid-column: 1 / -1; order: -1; width: 100%; min-height: 46px; }
+  .timeadjust .timebar-row .btn { min-height: 44px; }
+  .guide-btn { min-height: 44px; }
+  .wheel-detail { margin-top: 8px; }
+}
+
+/* motion: keep it subtle, and off for people who ask */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}

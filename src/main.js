@@ -3,12 +3,13 @@ import { initEphemeris, dateToJd, jdToDate } from './astro/ephemeris.js';
 import { natalFromBirth, buildChart, formatPos, houseOf, withSolarHouses, HOUSE_SYSTEMS } from './astro/chart.js';
 import { transitAspects, synastryAspects } from './astro/aspects.js';
 import { forecast, aspectPasses, outerAspects } from './astro/transits.js';
-import { isValidTimeZone } from './astro/time.js';
 import { describeAspect, describeEvent, buildReading, skyToday, natalPortrait, natalLabel, ordinal, describeSynastry, compareSummary, setSubject, voice, possessive, isSelfVoice, houseInfo, placementLine } from './astro/interpret.js';
 import { migrateKind } from './lib/charts-io.js';
 import { initManage } from './ui/manage.js';
 import { PLANETS, SIGNS, HOUSES, PLACEMENT_LINE } from './data/astro-data.js';
 import { renderWheel } from './ui/wheel.js';
+import { aspectKey, aspectsFor, sameSelection } from './ui/selection.js';
+import { validateStep, firstInvalidStep, STEP_TITLES } from './lib/form-steps.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -41,7 +42,8 @@ const state = {
   when: new Date(),
   tab: 'reading',
   renderToken: 0,
-  selected: null,
+  selection: null,
+  hadSaved: false,
   forecastDays: 90,
   filters: { aspect: true, station: true, ingress: true, lunation: true, outer: true, minor: false },
   cache: {},
@@ -67,6 +69,9 @@ function computeNatal(profile) {
   natal.timeUnknown = !!profile.timeUnknown;
   return natal;
 }
+
+const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const selectedAspect = () => state.selection?.aspect ?? null;
 
 const natalCache = new Map();
 function natalOf(profile) {
@@ -136,15 +141,71 @@ function renderWheelView() {
   $('.left').classList.toggle('compare', cmp);
   if (cmp) {
     const c = compareData();
-    $('#wheel').innerHTML = renderWheel({ natal: c.A, transit: { points: c.B.points }, aspects: c.aspects, selected: state.selected, outerLabel: c.nameB, innerLabel: c.nameA, compact: isMobile() });
+    $('#wheel').innerHTML = renderWheel({ natal: c.A, transit: { points: c.B.points }, aspects: c.aspects, selection: state.selection, outerLabel: c.nameB, innerLabel: c.nameA, compact: isMobile() });
     $('#legend-outer').textContent = `Outer ring: ${c.nameB}`;
     $('#legend-inner').textContent = `Inner ring: ${c.nameA}`;
     return;
   }
   const { transit, aspects } = current();
-  $('#wheel').innerHTML = renderWheel({ natal: state.natal, transit, aspects, selected: state.selected, compact: isMobile() });
+  $('#wheel').innerHTML = renderWheel({ natal: state.natal, transit, aspects, selection: state.selection, compact: isMobile() });
   $('#legend-outer').textContent = 'Outer ring: transiting planets';
   $('#legend-inner').textContent = `Inner ring: ${possessive()} natal chart`;
+}
+
+/** The aspect list + selected card shown under the wheel on phones (a tappable alternative to thin lines). */
+function aspectList(list, selectedKey, cmp) {
+  const rows = list.slice(0, 8).map((a) => {
+    const on = aspectKey(a) === selectedKey;
+    const title = cmp ? `${PLANETS[a.transit].name} ${a.aspect} ${PLANETS[a.target].name}` : `${PLANETS[a.transit].name} ${a.aspect} ${natalLabel(a.target)}`;
+    return `<li><button type="button" data-asp="${aspectKey(a)}" class="${on ? 'on' : ''}" aria-pressed="${on}"><i class="dot ${a.tone}"></i><span class="glyphs">${PLANETS[a.transit].glyph}${VS} ${a.glyph}${VS} ${PLANETS[a.target].glyph}${VS}</span><span class="t">${esc(title)}</span><span class="orb">${a.orb.toFixed(1)}°</span></button></li>`;
+  }).join('');
+  return rows ? `<h3 class="alist-title">Aspects right now</h3><ul class="arow">${rows}</ul>` : '';
+}
+
+/** Planet detail card: where it is, and every aspect it is part of (each row selects that aspect). */
+function planetCard() {
+  const { side, key } = state.selection.planet;
+  const cmp = isCompareView();
+  let list;
+  let pts;
+  let who;
+  if (cmp) {
+    const c = compareData();
+    list = c.aspects;
+    pts = side === 'natal' ? c.A.points : c.B.points;
+    who = side === 'natal' ? c.nameA : c.nameB;
+  } else {
+    const cur = current();
+    list = cur.aspects;
+    pts = side === 'natal' ? state.natal.points : cur.transit.points;
+    who = side === 'natal' ? possessive() : 'Transiting';
+  }
+  const p = pts[key];
+  if (!p) return '';
+  const rows = aspectsFor(list, { side, key });
+  const house = !cmp || side === 'natal' ? ` · ${ordinal(p.house)} house` : '';
+  const heading = `${who === 'your' ? 'Your' : who} ${PLANETS[key].name}`;
+  const line = side === 'natal' && !cmp ? esc(voice(`${placementLine(key)}.`)) : `${esc(PLANETS[key].name)} stands for ${esc(PLANETS[key].principle)}.`;
+  const items = rows.length
+    ? `<ul class="arow">${rows.map((a) => `<li><button type="button" data-asp="${aspectKey(a)}"><i class="dot ${a.tone}"></i><span class="glyphs">${PLANETS[a.transit].glyph}${VS} ${a.glyph}${VS} ${PLANETS[a.target].glyph}${VS}</span><span class="t">${esc(side === 'natal' ? `${PLANETS[a.transit].name} ${a.aspect}` : `${a.aspect} ${PLANETS[a.target].name}`)}</span><span class="orb">${a.orb.toFixed(1)}°</span></button></li>`).join('')}</ul>`
+    : '<p class="muted small" style="margin:8px 0 0">No tight aspects to this planet right now.</p>';
+  return `<article class="card pcard">
+    <h3>${g(key)}${esc(heading)}</h3>
+    <p class="muted" style="margin:0 0 4px">${esc(SIGNS[p.sign].name)} ${Math.floor(p.degInSign)}°${p.retro ? ' ℞' : ''}${esc(house)}</p>
+    <p style="margin:0">${line}</p>
+    ${items}
+  </article>`;
+}
+
+/** Whatever is selected, as a card (aspect or planet), or '' when nothing is. */
+function selectionCard() {
+  if (!state.selection) return '';
+  const cmp = isCompareView();
+  if (state.selection.planet) return planetCard();
+  const list = cmp ? compareData().aspects : current().aspects;
+  const a = list.find((x) => aspectKey(x) === state.selection.aspect);
+  if (!a) return '';
+  return cmp ? synCard(a, compareData()) : aspectCard(a, current().jd);
 }
 
 function renderWheelDetail() {
@@ -152,13 +213,8 @@ function renderWheelDetail() {
   if (!isMobile()) { el.innerHTML = ''; return; }
   const cmp = isCompareView();
   const list = cmp ? compareData().aspects : current().aspects;
-  const a = list.find((x) => aspectKey(x) === state.selected);
-  if (!a) { el.innerHTML = '<p class="hint">Tap a line on the wheel to read that aspect.</p>'; return; }
-  el.innerHTML = cmp ? synCard(a, compareData()) : aspectCard(a, current().jd);
-}
-
-function aspectKey(a) {
-  return `${a.transit}-${a.aspect}-${a.target}`;
+  const card = selectionCard();
+  el.innerHTML = `${card || '<p class="hint">Tap a planet or a line on the wheel, or pick an aspect below.</p>'}${aspectList(list, selectedAspect(), cmp)}`;
 }
 
 function exactText(a, jd) {
@@ -170,7 +226,7 @@ function exactText(a, jd) {
 
 function aspectCard(a, jd, { withExact = true } = {}) {
   const d = describeAspect(a, state.natal);
-  const sel = state.selected === aspectKey(a);
+  const sel = selectedAspect() === aspectKey(a);
   const exact = withExact ? exactText(a, jd) : '';
   return `<article class="card tcard ${a.tone}${sel ? ' selected' : ''}" data-asp="${aspectKey(a)}">
     <header>
@@ -280,10 +336,10 @@ function fillReadingLater(token) {
 
 function transitsView() {
   const { jd, aspects } = current();
-  const sel = aspects.find((a) => aspectKey(a) === state.selected);
+  const card = selectionCard();
   const rows = aspects.slice(0, 40).map((a) => {
     const max = aspects[0].strength;
-    return `<tr class="row ${aspectKey(a) === state.selected ? 'selected' : ''}" data-asp="${aspectKey(a)}">
+    return `<tr class="row ${aspectKey(a) === selectedAspect() ? 'selected' : ''}" data-asp="${aspectKey(a)}">
       <td>${g(a.transit)}${esc(PLANETS[a.transit].name)}${a.retro ? ' ℞' : ''}</td>
       <td class="t-${a.tone}"><span class="g">${a.glyph}${VS}</span>${esc(a.aspect)}</td>
       <td>${g(a.target)}${esc(natalLabel(a.target).replace('natal ', ''))}</td>
@@ -293,7 +349,7 @@ function transitsView() {
     </tr>`;
   }).join('');
   return `
-    ${sel ? aspectCard(sel, jd) : '<p class="muted">Select a line on the wheel or a row below to read it in detail.</p>'}
+    ${card || '<p class="muted">Select a planet or a line on the wheel, or a row below, to read it in detail.</p>'}
     <div class="card"><table>
       <thead><tr><th>Transiting</th><th>Aspect</th><th>Natal</th><th>Orb</th><th class="m-hide">Phase</th><th class="m-hide">Weight</th></tr></thead>
       <tbody>${rows || '<tr><td colspan="6" class="muted">No active aspects.</td></tr>'}</tbody>
@@ -345,7 +401,7 @@ function natalView() {
 
 function synCard(a, c) {
   const d = describeSynastry(a, c.nameA, c.nameB, c.pa.kind, c.pb.kind);
-  const sel = state.selected === aspectKey(a);
+  const sel = selectedAspect() === aspectKey(a);
   return `<article class="card tcard ${a.tone}${sel ? ' selected' : ''}" data-asp="${aspectKey(a)}">
     <header><span class="glyphs">${PLANETS[a.transit].glyph}${VS} ${a.glyph}${VS} ${PLANETS[a.target].glyph}${VS}</span><h3>${esc(d.title)}</h3></header>
     <p>${esc(d.text)}</p>
@@ -405,11 +461,21 @@ function renderPanel() {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === state.tab));
 }
 
+function relativeDay(days) {
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  if (days === -1) return 'yesterday';
+  return days > 0 ? `in ${days} days` : `${-days} days ago`;
+}
+
 function renderTimebar() {
-  $('#when').value = toLocalInput(state.when);
-  const days = Math.round((state.when - state.now) / 86400000);
+  const d = state.when;
+  $('#when').value = toLocalInput(d);
+  const days = Math.round((d - state.now) / 86400000);
   $('#scrub').value = Math.max(-365, Math.min(365, days));
   $('#scrub-label').textContent = days === 0 ? 'today' : `${days > 0 ? '+' : ''}${days} days`;
+  $('#date-main').textContent = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  $('#date-sub').textContent = `${d.getFullYear()} · ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · ${relativeDay(days)}`;
 }
 
 function renderAll({ keepScroll = true } = {}) {
@@ -424,31 +490,56 @@ function renderAll({ keepScroll = true } = {}) {
 /* ---------- interactions ---------- */
 function setWhen(d) {
   state.when = d;
-  state.selected = null;
+  state.selection = null;
   renderAll();
 }
 
-function select(key, { switchTab = false } = {}) {
-  const toggle = !switchTab || isMobile() || isCompareView();
-  state.selected = state.selected === key && toggle ? null : key;
-  if (switchTab && !isCompareView() && !isMobile()) state.tab = 'transits';
+/** Show the card for a new selection: desktop moves to the Transits tab, phones keep the card under the wheel. */
+function afterSelect({ fromWheel }) {
+  if (fromWheel && !isCompareView() && !isMobile()) state.tab = 'transits';
   renderAll();
+  if (!state.selection) return;
+  const behavior = reduceMotion() ? 'auto' : 'smooth';
+  if (isMobile() && $('.left').offsetParent) $('#wheel-detail').scrollIntoView({ block: 'nearest', behavior });
+  else if (fromWheel && !isCompareView()) $('.right').scrollIntoView({ behavior, block: 'start' });
+}
+
+function selectAspect(key, { fromWheel = false } = {}) {
+  const next = { aspect: key };
+  state.selection = sameSelection(state.selection, next) ? null : next;
+  afterSelect({ fromWheel });
+}
+
+function selectPlanet(side, key, { fromWheel = true } = {}) {
+  const next = { planet: { side, key } };
+  state.selection = sameSelection(state.selection, next) ? null : next;
+  afterSelect({ fromWheel });
 }
 
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-asp]');
-  if (t) {
-    const inWheel = !!t.closest('#wheel');
-    select(t.dataset.asp, { switchTab: inWheel });
-    if (inWheel && !isCompareView() && !isMobile()) $('.right').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const pl = e.target.closest('[data-pl]');
+  if (pl) {
+    const [side, key] = pl.dataset.pl.split(':');
+    selectPlanet(side, key);
     return;
   }
+  const t = e.target.closest('[data-asp]');
+  if (t) { selectAspect(t.dataset.asp, { fromWheel: !!t.closest('#wheel') }); return; }
   const tab = e.target.closest('.tab');
-  if (tab) { state.tab = tab.dataset.tab; state.selected = null; renderAll({ keepScroll: false }); if (isMobile()) window.scrollTo(0, 0); return; }
+  if (tab) { state.tab = tab.dataset.tab; state.selection = null; renderAll({ keepScroll: false }); if (isMobile()) window.scrollTo(0, 0); return; }
   const f = e.target.closest('[data-filter]');
   if (f) { state.filters[f.dataset.filter] = !state.filters[f.dataset.filter]; renderPanel(); return; }
   const sh = e.target.closest('[data-shift]');
   if (sh) setWhen(new Date(state.when.getTime() + +sh.dataset.shift * 86400000));
+});
+
+// keyboard: SVG planets and lines act like buttons
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target.closest?.('#wheel [role="button"], #landing-wheel[role="button"]');
+  if (!el) return;
+  e.preventDefault();
+  el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 });
 
 document.addEventListener('change', (e) => {
@@ -458,46 +549,97 @@ document.addEventListener('change', (e) => {
 let scrubTimer = null;
 $('#scrub').addEventListener('input', (e) => {
   state.when = new Date(state.now.getTime() + +e.target.value * 86400000);
-  state.selected = null;
+  state.selection = null;
   renderWheelView();
-  renderTimebar({ fromScrub: true });
+  renderTimebar();
   clearTimeout(scrubTimer);
   scrubTimer = setTimeout(() => { renderPanel(); renderWheelDetail(); }, 220);
 });
 $('#now').addEventListener('click', () => { state.now = new Date(); setWhen(new Date()); });
 
-/* ---------- birth form ---------- */
+/* ---------- chart form (guided: date/time -> place -> review) ---------- */
 const dlg = $('#birth-dialog');
 const form = $('#birth-form');
+const F = form.elements;
 
 let editingId = null;
-const updateKindHint = () => { $('#kind-hint').textContent = KIND_HINT[form.elements.kind.value] ?? ''; };
+let step = 1;
+let lastLookup = '';
+
+const formValues = () => ({ date: F.date.value, time: F.time.value, timeUnknown: F.timeUnknown.checked, lat: F.lat.value, lon: F.lon.value, tz: F.tz.value.trim() });
+const showError = (msg) => { const el = $('#form-error'); el.textContent = msg; el.hidden = !msg; };
+const updateKindHint = () => { $('#kind-hint').textContent = KIND_HINT[F.kind.value] ?? ''; };
+
+function reviewSummary() {
+  const v = formValues();
+  const when = v.date ? new Date(`${v.date}T${v.timeUnknown ? '12:00' : v.time || '12:00'}`) : null;
+  $('#review-when').textContent = when && !Number.isNaN(+when)
+    ? `${when.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}${v.timeUnknown ? ' · time unknown' : ` · ${when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`}`
+    : 'Not set';
+  const coords = v.lat !== '' && v.lon !== '' ? `${(+v.lat).toFixed(2)}°, ${(+v.lon).toFixed(2)}°` : '';
+  $('#review-where').textContent = [F.place.value.trim(), coords, v.tz].filter(Boolean).join(' · ') || 'Not set';
+}
+
+function showChosen() {
+  const el = $('#place-chosen');
+  const ok = F.lat.value !== '' && F.lon.value !== '' && F.tz.value;
+  el.hidden = !ok;
+  if (ok) el.textContent = `✓ ${F.place.value.trim() || 'Custom coordinates'} · ${(+F.lat.value).toFixed(2)}°, ${(+F.lon.value).toFixed(2)}° · ${F.tz.value}`;
+}
+
+function goStep(n, { focus = true } = {}) {
+  step = Math.max(1, Math.min(3, n));
+  document.querySelectorAll('#birth-form .step').forEach((sec) => { sec.hidden = +sec.dataset.step !== step; });
+  document.querySelectorAll('#birth-form .stepbar i').forEach((dot, i) => dot.classList.toggle('on', i < step));
+  $('#step-label').textContent = `${editingId ? 'Editing chart · ' : ''}Step ${step} of 3`;
+  $('#form-title').textContent = STEP_TITLES[step];
+  $('#step-back').hidden = step === 1;
+  $('#step-next').hidden = step === 3;
+  $('#step-done').hidden = step !== 3;
+  $('#step-done').textContent = editingId ? 'Save changes' : 'Calculate';
+  if (step === 3) reviewSummary();
+  if (step === 2) showChosen();
+  showError('');
+  if (focus) {
+    const target = { 1: F.date, 2: F.place, 3: F.name }[step];
+    // don't pop the keyboard up on phones just for stepping through
+    if (!isMobile() || step === 2) setTimeout(() => target?.focus(), 30);
+  }
+}
 
 function fillForm(p) {
-  form.elements.kind.value = p.kind || 'person';
-  for (const [k, v] of Object.entries({ name: p.name, date: p.date, time: p.time, place: p.place, lat: p.lat, lon: p.lon, tz: p.tz, houseSystem: p.houseSystem ?? 'W' })) form.elements[k].value = v ?? '';
-  form.elements.timeUnknown.checked = !!p.timeUnknown;
-  form.elements.time.disabled = !!p.timeUnknown;
+  F.kind.value = p.kind || 'person';
+  for (const [k, v] of Object.entries({ name: p.name, date: p.date, time: p.time, place: p.place, lat: p.lat, lon: p.lon, tz: p.tz, houseSystem: p.houseSystem ?? 'W' })) F[k].value = v ?? '';
+  F.timeUnknown.checked = !!p.timeUnknown;
+  F.time.disabled = !!p.timeUnknown;
+  lastLookup = p.place || '';
 }
 
 function openForm(mode = 'edit') {
-  $('#form-error').hidden = true;
   $('#place-results').innerHTML = '';
+  $('#advanced').open = false;
   editingId = mode === 'edit' && state.profile ? state.profile.id : null;
-  $('#form-title').textContent = editingId ? 'Edit chart' : state.profiles.length ? 'Add a chart' : 'Birth details';
   $('#delete-profile').hidden = !editingId;
-  fillForm(editingId ? state.profile : { time: '12:00', tz: Intl.DateTimeFormat().resolvedOptions().timeZone, kind: state.profiles.length ? 'person' : 'self' });
+  fillForm(editingId ? state.profile : { time: '12:00', tz: '', kind: state.profiles.length ? 'person' : 'self', name: '', date: '', place: '' });
   updateKindHint();
+  goStep(editingId ? 3 : 1, { focus: false });
   dlg.showModal();
 }
 
-form.elements.kind.addEventListener('change', updateKindHint);
-form.elements.timeUnknown.addEventListener('change', (e) => { form.elements.time.disabled = e.target.checked; });
+F.kind.addEventListener('change', updateKindHint);
+F.timeUnknown.addEventListener('change', (e) => { F.time.disabled = e.target.checked; });
 $('#cancel').addEventListener('click', () => dlg.close());
-$('#example').addEventListener('click', () => fillForm(EXAMPLE));
 $('#edit-birth').addEventListener('click', () => openForm('edit'));
 $('#add-profile').addEventListener('click', () => openForm('add'));
 $('#start').addEventListener('click', () => openForm('add'));
+$('#step-back').addEventListener('click', () => goStep(step - 1));
+$('#step-next').addEventListener('click', () => {
+  const problem = validateStep(step, formValues());
+  if (problem) { showError(problem); return; }
+  goStep(step + 1);
+});
+document.querySelectorAll('#birth-form [data-goto]').forEach((b) => b.addEventListener('click', () => goStep(+b.dataset.goto)));
+$('#manual-coords').addEventListener('click', () => { $('#advanced').open = true; goStep(3); });
 $('#delete-profile').addEventListener('click', () => {
   if (!editingId || !confirm('Delete this chart from this browser?')) return;
   state.profiles = state.profiles.filter((p) => p.id !== editingId);
@@ -505,43 +647,55 @@ $('#delete-profile').addEventListener('click', () => {
   if (state.profiles.length) activate(state.profiles[0].id); else clearEverything();
 });
 
+// typing a new place invalidates the previously chosen coordinates
+F.place.addEventListener('input', () => {
+  if (F.place.value.trim() === lastLookup) return;
+  F.lat.value = '';
+  F.lon.value = '';
+  F.tz.value = '';
+  $('#place-chosen').hidden = true;
+});
+
 async function lookup() {
-  const q = form.elements.place.value.trim();
+  const q = F.place.value.trim();
   const ul = $('#place-results');
-  if (!q) return;
+  if (!q) { ul.innerHTML = '<li class="muted">Type a city first.</li>'; return; }
   ul.innerHTML = '<li class="muted">Searching…</li>';
   try {
     const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=en&format=json`);
     const data = await res.json();
-    if (!data.results?.length) { ul.innerHTML = '<li class="muted">No matches. Try "City, Country" or enter coordinates below.</li>'; return; }
-    ul.innerHTML = data.results.map((r, i) => `<li data-i="${i}">${esc(r.name)}${r.admin1 ? ', ' + esc(r.admin1) : ''}, ${esc(r.country || '')} <span class="hint">· ${r.latitude.toFixed(2)}, ${r.longitude.toFixed(2)} · ${esc(r.timezone)}</span></li>`).join('');
-    ul.onclick = (ev) => {
-      const li = ev.target.closest('li[data-i]');
-      if (!li) return;
+    if (!data.results?.length) { ul.innerHTML = '<li class="muted">No matches. Try "City, Country", or enter coordinates manually.</li>'; return; }
+    ul.innerHTML = data.results.map((r, i) => `<li data-i="${i}" role="button" tabindex="0">${esc(r.name)}${r.admin1 ? ', ' + esc(r.admin1) : ''}, ${esc(r.country || '')} <span class="hint">· ${r.latitude.toFixed(2)}, ${r.longitude.toFixed(2)} · ${esc(r.timezone)}</span></li>`).join('');
+    const choose = (li) => {
       const r = data.results[li.dataset.i];
-      form.elements.place.value = `${r.name}${r.admin1 ? ', ' + r.admin1 : ''}, ${r.country || ''}`;
-      form.elements.lat.value = r.latitude;
-      form.elements.lon.value = r.longitude;
-      form.elements.tz.value = r.timezone;
+      F.place.value = `${r.name}${r.admin1 ? ', ' + r.admin1 : ''}, ${r.country || ''}`;
+      lastLookup = F.place.value.trim();
+      F.lat.value = r.latitude;
+      F.lon.value = r.longitude;
+      F.tz.value = r.timezone;
       ul.innerHTML = '';
+      showChosen();
+      showError('');
     };
+    ul.onclick = (ev) => { const li = ev.target.closest('li[data-i]'); if (li) choose(li); };
+    ul.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { const li = ev.target.closest('li[data-i]'); if (li) { ev.preventDefault(); choose(li); } } };
   } catch {
-    ul.innerHTML = '<li class="muted">Lookup unavailable (offline?). Enter latitude, longitude and time zone manually.</li>';
+    ul.innerHTML = '<li class="muted">Search unavailable (offline?). Use "Enter coordinates manually instead".</li>';
   }
 }
 $('#lookup').addEventListener('click', lookup);
-form.elements.place.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); lookup(); } });
+F.place.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); lookup(); } });
 
 form.addEventListener('submit', (e) => {
   e.preventDefault();
-  const f = form.elements;
-  const err = $('#form-error');
-  const profile = { id: editingId || uid(), kind: f.kind.value, name: f.name.value.trim(), date: f.date.value, time: f.time.value || '12:00', timeUnknown: f.timeUnknown.checked, place: f.place.value.trim(), lat: +f.lat.value, lon: +f.lon.value, tz: f.tz.value.trim(), houseSystem: f.houseSystem.value };
-  const problem = !profile.date ? 'Enter a date of birth.'
-    : !(profile.lat >= -90 && profile.lat <= 90) || !(profile.lon >= -180 && profile.lon <= 180) ? 'Latitude must be −90…90 and longitude −180…180.'
-    : !isValidTimeZone(profile.tz) ? 'That time zone is not recognised. Use a name like America/New_York.' : '';
-  if (problem) { err.textContent = problem; err.hidden = false; return; }
+  // Enter on steps 1-2 means "next"; only the review step saves
+  if (step < 3) { $('#step-next').click(); return; }
+  const v = formValues();
+  const bad = firstInvalidStep(v);
+  if (bad) { goStep(bad, { focus: false }); showError(validateStep(bad, v)); return; }
+  const profile = { id: editingId || uid(), kind: F.kind.value, name: F.name.value.trim(), date: v.date, time: v.timeUnknown ? '12:00' : v.time, timeUnknown: v.timeUnknown, place: F.place.value.trim(), lat: +v.lat, lon: +v.lon, tz: v.tz, houseSystem: F.houseSystem.value };
   dlg.close();
+  if (state.demo) { state.demo = false; state.profiles = []; }
   const i = state.profiles.findIndex((p) => p.id === profile.id);
   if (i >= 0) state.profiles[i] = profile; else state.profiles.push(profile);
   activate(profile.id, { keepTab: true });
@@ -568,16 +722,26 @@ function activate(id, { keepTab = false } = {}) {
   setSubject(state.profile.name, state.profile.kind);
   state.natal = natalOf(state.profile);
   state.cache = {};
-  state.selected = null;
+  state.selection = null;
   state.now = new Date();
   state.when = new Date();
   if (!keepTab && state.tab === 'compare') state.tab = 'reading';
   saveStore();
   $('#empty').hidden = true;
   $('#main').hidden = false;
+  syncChrome();
   renderProfileControls();
   renderProfile();
   renderAll({ keepScroll: false });
+}
+
+/** Header/banner state that depends on whether a chart exists and whether we're in the example. */
+function syncChrome() {
+  document.body.classList.toggle('no-chart', !state.profile);
+  document.body.classList.toggle('demo', state.demo && !!state.profile);
+  const banner = $('#demo-banner');
+  banner.hidden = !(state.demo && state.profile);
+  $('#demo-exit').textContent = state.hadSaved ? 'Back to my charts' : 'Create my chart';
 }
 
 function clearStore() {
@@ -621,20 +785,94 @@ function showEmpty() {
   $('#main').hidden = true;
   $('#empty').hidden = false;
   $('#profile-summary').textContent = '';
+  syncChrome();
   renderProfileControls();
+  renderLanding();
 }
+
+/** The first-visit preview: a live example wheel for today. Tapping it opens the interactive example. */
+function renderLanding() {
+  try {
+    const natal = natalOf(EXAMPLE);
+    const transit = buildChart({ jd: dateToJd(new Date()), lat: natal.lat, lon: natal.lon });
+    for (const p of Object.values(transit.points)) p.house = houseOf(p.lon, natal.cusps);
+    $('#landing-wheel').innerHTML = renderWheel({ natal, transit, aspects: transitAspects(transit.points, natal.points), compact: isMobile(), outerLabel: 'Sky today', innerLabel: 'Example' });
+  } catch { /* the preview is decoration; the buttons still work */ }
+}
+
+/** Explore the example without saving anything. */
+function enterDemo() {
+  state.demo = true;
+  state.hadSaved = false;
+  state.profiles = [EXAMPLE];
+  state.compareId = '';
+  state.tab = isMobile() ? 'wheel' : 'reading';
+  activate(EXAMPLE.id, { keepTab: true });
+  window.scrollTo(0, 0);
+}
+
+$('#explore-example').addEventListener('click', enterDemo);
+$('#landing-wheel').addEventListener('click', enterDemo);
+$('#landing-import').addEventListener('click', () => manage.openImport());
+$('#demo-exit').addEventListener('click', () => {
+  if (state.hadSaved) { location.href = location.pathname; return; }
+  state.demo = false;
+  state.profiles = [];
+  state.activeId = null;
+  natalCache.clear();
+  showEmpty();
+  openForm('add');
+});
 
 $('#profile-select').addEventListener('change', (e) => activate(e.target.value));
 $('#compare-select').addEventListener('change', (e) => {
   state.compareId = e.target.value;
   state.tab = state.compareId ? 'compare' : 'reading';
-  state.selected = null;
+  state.selection = null;
   saveStore();
   renderProfileControls();
   renderAll();
 });
 
-mq.addEventListener('change', () => { if (state.profile) renderAll({ keepScroll: false }); });
+mq.addEventListener('change', () => {
+  $('#timeadjust').open = !isMobile();
+  if (state.profile) renderAll({ keepScroll: false }); else renderLanding();
+});
+
+/* ---------- "What am I looking at?" ---------- */
+function buildGuide() {
+  const planets = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'chiron', 'node']
+    .map((k) => `<span><span class="g">${PLANETS[k].glyph}${VS}</span>${esc(PLANETS[k].name)}</span>`).join('');
+  const signs = SIGNS.map((x) => `<span><span class="g">${x.glyph}${VS}</span>${esc(x.name)}</span>`).join('');
+  return `
+    <h3>The rings</h3>
+    <ul>
+      <li><b>Outer ring (gold):</b> where the planets are in the sky on the date you've chosen. These are the <i>transits</i>.</li>
+      <li><b>Inner ring (white):</b> the chart itself, calculated for the moment of birth or founding. This is the <i>natal chart</i>.</li>
+      <li><b>Coloured band:</b> the 12 zodiac signs. <b>Numbers 1–12:</b> the houses, or areas of life.</li>
+    </ul>
+    <h3>The lines</h3>
+    <ul>
+      <li><b style="color:var(--hard)">Red</b>: a challenging aspect (square or opposition), friction that asks for action.</li>
+      <li><b style="color:var(--flow)">Teal</b>: a flowing aspect (trine or sextile), ease and opportunity.</li>
+      <li><b style="color:var(--intense)">Purple</b>: a conjunction, two energies merging.</li>
+      <li>Thicker lines are closer to exact.</li>
+    </ul>
+    <h3>Try it</h3>
+    <ul>
+      <li>Tap a planet to see everything touching it, or tap a line to read that one aspect. Everything unrelated fades.</li>
+      <li>On a phone, the list under the wheel does the same thing with bigger targets.</li>
+      <li>Move the date to watch the outer ring shift.</li>
+    </ul>
+    <h3>Symbols</h3>
+    <div class="glossary">${planets}</div>
+    <div class="glossary">${signs}</div>`;
+}
+$('#guide-btn').addEventListener('click', () => {
+  $('#guide-body').innerHTML = buildGuide();
+  $('#guide-dialog').showModal();
+});
+$('#guide-close').addEventListener('click', () => $('#guide-dialog').close());
 
 /* ---------- boot ---------- */
 async function boot() {
@@ -647,12 +885,14 @@ async function boot() {
     throw err;
   }
   $('#loading').hidden = true;
+  $('#timeadjust').open = !isMobile();
 
   const params = new URLSearchParams(location.search);
   state.tab = params.get('tab') || (isMobile() ? 'wheel' : 'reading');
   if (isMobile()) state.forecastDays = 30;
   if (params.get('demo')) {
     state.demo = true;
+    try { state.hadSaved = !!JSON.parse(localStorage.getItem(STORE_KEY) || 'null')?.profiles?.length; } catch { state.hadSaved = false; }
     state.profiles = params.get('demo') === '2' ? [EXAMPLE, EXAMPLE2] : [EXAMPLE];
     if (params.get('demo') === '2') state.compareId = EXAMPLE2.id;
     activate(EXAMPLE.id, { keepTab: true });

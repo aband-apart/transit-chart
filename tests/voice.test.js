@@ -19,6 +19,8 @@ test('another person: name + they/them', () => {
   assert.equal(voice('how others mirror you and what you value'), 'how others mirror them and what they value');
   assert.equal(voice('You are asked to take responsibility.'), 'They are asked to take responsibility.');
   assert.equal(voice("you're ready, express yourself"), "they're ready, express themselves");
+  assert.equal(voice('Your emotional needs and what soothes you.'), "Alex's emotional needs and what soothes them.");
+  assert.equal(voice('what moves you, and what you need'), 'what moves them, and what they need');
   reset();
 });
 
@@ -29,6 +31,7 @@ test('country/event: name + it/its with agreeing verbs, never "they"', () => {
   assert.equal(voice('what you actually want, because you can rebuild it'), 'what it actually wants, because it can rebuild it');
   assert.equal(voice('express yourself and what makes you shine'), 'express itself and what makes it shine');
   assert.equal(voice('Your history'), "Acme Inc's history");
+  assert.equal(voice('what soothes you.'), 'what soothes it.');
   assert.equal(voice('how you present yourself and move through the world'), 'how it presents itself and moves through the world');
   assert.equal(voice('you can build it and take it further'), 'it can build it and take it further');
   reset();

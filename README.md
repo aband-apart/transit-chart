@@ -30,6 +30,14 @@ Add `?demo=1` to the URL to load an example chart, or `?demo=2&tab=compare` for 
 
 Unknown birth time is supported: houses fall back to Sun-sign whole houses and Asc/MC are omitted.
 
+## First visit and chart setup
+
+A first visit shows a live example wheel and three actions: **Create my chart**, **Explore an example chart** (nothing is saved) and **Import saved charts**. Controls that need a chart stay hidden until one exists. Creating a chart is a short guided flow (date and time, place, review); place search fills in coordinates and the time zone, and manual coordinates, time zone and house system live under **Advanced options**.
+
+## Exploring the chart
+
+Tap a planet to light up everything touching it (the rest fades), or tap a line to read that one aspect. On phones there is also a list of the current aspects under the wheel with larger tap targets. **What am I looking at?** explains the rings, houses, symbols and line colours. The date control shows the selected day with previous/next and Today; the slider and date picker open under **Adjust date and time**. Motion is subtle and switches off for people who prefer reduced motion.
+
 ## Saved charts, backups and wording
 
 Each chart has a type: **Me** (readings say "you"), **Another person** (their name and "they", advice written about them), or **Country/place** and **Event/organization** (the name and "it", never treated as a person).

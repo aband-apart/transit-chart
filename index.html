@@ -30,6 +30,11 @@
         <div id="profile-summary" class="profile-summary"></div>
       </header>
 
+      <div id="demo-banner" class="demo-banner" hidden>
+        <span>Exploring an example chart. Nothing is saved.</span>
+        <button type="button" id="demo-exit" class="btn small gold">Create my chart</button>
+      </div>
+
       <main id="main" class="layout" hidden>
         <section class="left">
           <div id="wheel" class="wheel-wrap"></div>
@@ -40,18 +45,25 @@
             <span><i class="line flow"></i>Flowing</span>
             <span><i class="line intense"></i>Conjunction</span>
           </div>
+          <button type="button" id="guide-btn" class="linkish guide-btn">What am I looking at?</button>
           <div id="wheel-detail" class="wheel-detail"></div>
           <div class="timebar">
-            <div class="timebar-row">
-              <button class="btn small" data-shift="-7">−1w</button>
-              <button class="btn small" data-shift="-1">−1d</button>
-              <input id="when" type="datetime-local" />
-              <button class="btn small" data-shift="1">+1d</button>
-              <button class="btn small" data-shift="7">+1w</button>
-              <button id="now" class="btn small gold">Now</button>
+            <div class="datenav">
+              <button type="button" class="btn icon" data-shift="-1" aria-label="Previous day">‹</button>
+              <div class="datelabel" aria-live="polite"><strong id="date-main"></strong><span id="date-sub"></span></div>
+              <button type="button" class="btn icon" data-shift="1" aria-label="Next day">›</button>
+              <button type="button" id="now" class="btn small gold">Today</button>
             </div>
-            <input id="scrub" type="range" min="-365" max="365" value="0" step="1" aria-label="Scrub through time" />
-            <div class="scrub-labels"><span>−1 year</span><span id="scrub-label">today</span><span>+1 year</span></div>
+            <details class="timeadjust" id="timeadjust">
+              <summary>Adjust date and time</summary>
+              <div class="timebar-row">
+                <button type="button" class="btn small" data-shift="-7">−1 week</button>
+                <input id="when" type="datetime-local" aria-label="Date and time" />
+                <button type="button" class="btn small" data-shift="7">+1 week</button>
+              </div>
+              <input id="scrub" type="range" min="-365" max="365" value="0" step="1" aria-label="Scrub through time" />
+              <div class="scrub-labels"><span>−1 year</span><span id="scrub-label">today</span><span>+1 year</span></div>
+            </details>
           </div>
         </section>
 
@@ -69,63 +81,99 @@
       </main>
 
       <div id="loading" class="loading">Loading ephemeris…</div>
-      <div id="empty" class="empty" hidden>
-        <h1>See how today's sky touches your chart</h1>
-        <p>Enter your birth details to calculate your natal chart and see the planets moving through it. Everything is computed on your device, and your birth data never leaves this browser.</p>
-        <button id="start" class="btn gold big">Enter birth details</button>
+      <div id="empty" class="landing" hidden>
+        <div id="landing-wheel" class="landing-wheel" role="button" tabindex="0" aria-label="Explore an example chart"></div>
+        <div class="landing-copy">
+          <h1>See how today's sky touches your chart</h1>
+          <p>Calculate a natal chart, watch the planets move through it, and read what it means for the days ahead. Compare two charts, or chart a country or an organization.</p>
+          <div class="landing-actions">
+            <button id="start" class="btn gold big">Create my chart</button>
+            <button id="explore-example" class="btn big">Explore an example chart</button>
+            <button id="landing-import" class="btn big ghost">Import saved charts</button>
+          </div>
+          <p class="privacy">Private by design: charts are stored only in this browser, and nothing is sent anywhere except an optional place search, which sends just the city name to Open-Meteo.</p>
+        </div>
       </div>
     </div>
 
-    <dialog id="birth-dialog">
-      <form id="birth-form" method="dialog" autocomplete="off">
-        <h2 id="form-title">Birth details</h2>
-        <p class="hint" id="kind-hint"></p>
-        <p class="hint">Stored only in this browser (localStorage). A place lookup sends just the city name to Open-Meteo's geocoder.</p>
-        <div class="row">
-          <label>Name<input name="name" type="text" placeholder="e.g. Alex, USA, Acme Inc." /></label>
-          <label>Type
+    <dialog id="birth-dialog" aria-labelledby="form-title">
+      <form id="birth-form" method="dialog" autocomplete="off" novalidate>
+        <p class="stepno" id="step-label" aria-live="polite"></p>
+        <div class="stepbar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <h2 id="form-title">Date and time</h2>
+
+        <section class="step" data-step="1">
+          <label>This chart is for
             <select name="kind">
               <option value="self">Me</option>
               <option value="person">Another person</option>
-              <option value="place">Country or place</option>
-              <option value="event">Event or organization</option>
+              <option value="place">A country or place</option>
+              <option value="event">An event or organization</option>
             </select>
           </label>
-        </div>
-        <div class="row">
-          <label>Date of birth<input name="date" type="date" required /></label>
-          <label>Time of birth<input name="time" type="time" value="12:00" /></label>
-        </div>
-        <label class="check"><input name="timeUnknown" type="checkbox" /> I don't know my birth time <span class="hint">(Rising sign, houses and angles will be left out)</span></label>
-        <label>Birth place
-          <div class="place-row">
-            <input name="place" type="text" placeholder="City, country" />
-            <button type="button" id="lookup" class="btn">Look up</button>
+          <p class="hint" id="kind-hint"></p>
+          <div class="row">
+            <label>Date<input name="date" type="date" /></label>
+            <label>Time (local)<input name="time" type="time" value="12:00" /></label>
           </div>
-        </label>
-        <ul id="place-results" class="place-results"></ul>
-        <div class="row three">
-          <label>Latitude<input name="lat" type="number" step="any" required /></label>
-          <label>Longitude<input name="lon" type="number" step="any" required /></label>
-          <label>Time zone<input name="tz" type="text" list="tzlist" required placeholder="America/New_York" /></label>
-        </div>
-        <datalist id="tzlist"></datalist>
-        <label>House system
-          <select name="houseSystem">
-            <option value="W">Whole Sign (each sign is a house; Rising sign = 1st house)</option>
-            <option value="P">Placidus (most common in Western software)</option>
-            <option value="E">Equal (30° from the Ascendant)</option>
-          </select>
-        </label>
-        <p id="form-error" class="error" hidden></p>
+          <label class="check"><input name="timeUnknown" type="checkbox" /> I don't know the time <span class="hint">(Rising sign, houses and angles will be left out)</span></label>
+        </section>
+
+        <section class="step" data-step="2" hidden>
+          <label for="place-input">Place</label>
+          <div class="place-row">
+            <input id="place-input" name="place" type="text" placeholder="City, country" enterkeyhint="search" />
+            <button type="button" id="lookup" class="btn">Search</button>
+          </div>
+          <ul id="place-results" class="place-results" aria-live="polite"></ul>
+          <p id="place-chosen" class="chosen" hidden></p>
+          <p class="hint">The search sends only the place name to Open-Meteo. Time zone and coordinates are filled in for you.</p>
+          <button type="button" id="manual-coords" class="linkish">Enter coordinates manually instead</button>
+        </section>
+
+        <section class="step" data-step="3" hidden>
+          <dl class="review">
+            <div><dt>When</dt><dd id="review-when"></dd><button type="button" class="linkish" data-goto="1">Change</button></div>
+            <div><dt>Where</dt><dd id="review-where"></dd><button type="button" class="linkish" data-goto="2">Change</button></div>
+          </dl>
+          <label>Name <span class="hint">(optional)</span><input name="name" type="text" placeholder="e.g. Alex, USA, Acme Inc." /></label>
+          <details id="advanced" class="advanced">
+            <summary>Advanced options</summary>
+            <div class="row three">
+              <label>Latitude<input name="lat" type="number" step="any" inputmode="decimal" /></label>
+              <label>Longitude<input name="lon" type="number" step="any" inputmode="decimal" /></label>
+              <label>Time zone<input name="tz" type="text" list="tzlist" placeholder="America/New_York" /></label>
+            </div>
+            <label>House system
+              <select name="houseSystem">
+                <option value="W">Whole Sign (each sign is a house; Rising sign = 1st house)</option>
+                <option value="P">Placidus (most common in Western software)</option>
+                <option value="E">Equal (30° from the Ascendant)</option>
+              </select>
+            </label>
+          </details>
+          <datalist id="tzlist"></datalist>
+          <p class="hint privacy-line">Stored only in this browser. Nothing is uploaded.</p>
+        </section>
+
+        <p id="form-error" class="error" role="alert" hidden></p>
         <div class="actions">
           <button type="button" id="delete-profile" class="btn ghost danger" hidden>Delete</button>
-          <button type="button" id="example" class="btn ghost">Use an example</button>
           <span class="spacer"></span>
           <button type="button" id="cancel" class="btn ghost">Cancel</button>
-          <button type="submit" class="btn gold">Calculate</button>
+          <button type="button" id="step-back" class="btn" hidden>Back</button>
+          <button type="button" id="step-next" class="btn gold">Next</button>
+          <button type="submit" id="step-done" class="btn gold" hidden>Calculate</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="guide-dialog" aria-labelledby="guide-title">
+      <div class="guide">
+        <h2 id="guide-title">What am I looking at?</h2>
+        <div id="guide-body"></div>
+        <div class="actions"><span class="spacer"></span><button type="button" id="guide-close" class="btn gold">Got it</button></div>
+      </div>
     </dialog>
 
     <dialog id="manage-dialog" aria-labelledby="manage-title">

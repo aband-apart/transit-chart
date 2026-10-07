@@ -150,5 +150,9 @@ export function initManage(ctx) {
   $('#manage-close').addEventListener('click', () => dlg.close());
   dlg.addEventListener('close', () => { pending = null; say(''); });
 
-  return { open() { say(''); renderMain(); dlg.showModal(); } };
+  return {
+    open() { say(''); renderMain(); dlg.showModal(); },
+    /** Open the dialog and go straight to the file picker (must be called from a click). */
+    openImport() { say(''); renderMain(); dlg.showModal(); $('#import-file').click(); },
+  };
 }

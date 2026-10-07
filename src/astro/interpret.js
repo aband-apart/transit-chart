@@ -65,7 +65,9 @@ export function voice(text) {
     .replace(/\bYour\b/g, poss)
     .replace(/\byour\b/g, poss)
     .replace(/\byourself\b/g, it ? 'itself' : 'themselves')
-    .replace(OBJECT_RE, (_, cue, sp) => `${cue}${sp}${it ? 'it' : 'them'}`);
+    .replace(OBJECT_RE, (_, cue, sp) => `${cue}${sp}${it ? 'it' : 'them'}`)
+    // a clause-final "you" is an object ("what soothes you."); a subject is always followed by a verb
+    .replace(/\byou(?=\s*(?:[.,;:!?)]|$))/g, it ? 'it' : 'them');
   if (it) {
     out = out
       .replace(/\b(You|you)'re\b/g, (_, y) => (y === 'You' ? "It's" : "it's"))

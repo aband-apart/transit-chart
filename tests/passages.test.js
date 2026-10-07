@@ -63,6 +63,7 @@ test('another person: name and they; no second person anywhere, including advice
   const text = list.join('\n');
   assert.ok(!/\byou(r|rself)?\b/i.test(text), 'second person: ' + sentences(list).find((s) => /\byou(r|rself)?\b/i.test(s)));
   assert.ok(/\b(they|their|themselves)\b/i.test(text));
+  assert.ok(!/\bthey[.,;:!?]/i.test(text.replace(IDIOMS, '')), 'subject "they" used as an object: ' + sentences(list).find((x) => /\bthey[.,;:!?]/i.test(x)));
   assert.ok(!JUNK.test(text), 'template junk: ' + text.match(JUNK));
   assert.ok(!/may do well to do not/i.test(text));
 });
