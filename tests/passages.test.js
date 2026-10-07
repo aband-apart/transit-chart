@@ -42,7 +42,7 @@ function passages(kindA, kindB, nameA = 'Subject', nameB = 'Partner') {
 
 // Phrases that legitimately contain they/them regardless of subject
 const IDIOMS = /what they (seem|appear)|healing that comes from them|comes from them/gi;
-const HUMAN = /\b(emotional|feeling unsafe|unsafe|meditat\w*|romanc\w*|romantic|body|soothes?|self-doubt|self-criticism|childhood|siblings|children|lovers?|therapy|gut|instincts?|embarrass\w*|relationship friction)\b/i;
+const HUMAN = /\b(emotional|feeling unsafe|unsafe|meditat\w*|romanc\w*|romantic|body|soothes?|self-doubt|self-criticism|childhood|siblings|children|lovers?|therapy|gut|instincts?|embarrass\w*|relationship friction|spiritual|obsess\w*|compassion\w*|intuition|gentle|numbing|deeply felt)\b/i;
 const JUNK = /undefined|NaN|\[object|\bnull\b|  |\s,|,,|\.\.(?!\.)| \./;
 
 const sentences = (list) => list.flatMap((t) => t.split(/(?<=[.!?])\s+/));

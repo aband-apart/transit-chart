@@ -34,6 +34,10 @@ Unknown birth time is supported: houses fall back to Sun-sign whole houses and A
 
 A first visit shows a live example wheel and three actions: **Create my chart**, **Explore an example chart** (nothing is saved) and **Import saved charts**. Controls that need a chart stay hidden until one exists. Creating a chart is a short guided flow (date and time, place, review); place search fills in coordinates and the time zone, and manual coordinates, time zone and house system live under **Advanced options**.
 
+## Reading and forecast
+
+The **Reading** opens with an at-a-glance summary (climate, strongest transit, focus houses, Moon, retrogrades, what's coming), then the most important transits as expandable rows (the first one open), with the longer sections collapsed. The **Forecast** is a timeline grouped by week (up to 90 days) or month, with a colour-coded type badge on each event. Open any event for its detail and use **Show on chart** to move the chart to that date; the list stays where it was until you choose **Follow the chart date**. On phones the filters live in a **Filters** sheet. On desktop the wheel and date control stay in view while you scroll, sized to fit the window.
+
 ## Exploring the chart
 
 Tap a planet to light up everything touching it (the rest fades), or tap a line to read that one aspect. On phones there is also a list of the current aspects under the wheel with larger tap targets. **What am I looking at?** explains the rings, houses, symbols and line colours. The date control shows the selected day with previous/next and Today; the slider and date picker open under **Adjust date and time**. Motion is subtle and switches off for people who prefer reduced motion.

@@ -86,12 +86,13 @@ export const PLANET_C = {
     inHouse: 'is shaking up',
   },
   neptune: {
-    hard: 'Fog, confusion, escapism or disappointment. Things are not quite what they appear.',
-    soft: 'Inspiration, compassion and a creative or spiritual openness.',
-    conj: 'A deeply felt, dreamlike chapter that dissolves old certainties and invites meaning.',
+    principle: 'vision, ideals and dissolving boundaries',
+    hard: 'Fog, confusion, wishful thinking or disappointment. Things are not quite what they appear.',
+    soft: 'Inspiration, goodwill and a creative openness.',
+    conj: 'A dreamlike chapter that dissolves old certainties and invites new meaning.',
     hardTip: 'Verify facts and keep boundaries clear. Do not make big decisions in the fog.',
-    softTip: 'Make room for creativity and reflection. Intuition is a reliable guide now.',
-    avoid: 'Avoid idealizing partners or numbing out.',
+    softTip: 'Make room for creativity and reflection, and check inspired ideas against the facts.',
+    avoid: 'Avoid idealizing partners or drifting without a plan.',
     retro: 'Neptune retrograde clears the fog. Illusions come apart and things look clearer.',
     inHouse: 'is dissolving boundaries in',
   },
@@ -101,7 +102,7 @@ export const PLANET_C = {
     conj: 'A deep, irreversible shift. A part of it is reborn.',
     hardTip: 'Stop trying to control the outcome. Choose what to let go of before it is taken.',
     softTip: 'Invest in deep change, because there is endurance for it.',
-    avoid: 'Avoid manipulation, obsession and power plays.',
+    avoid: 'Avoid manipulation, fixation on control and power plays.',
     inHouse: 'is transforming',
   },
   chiron: {
@@ -109,9 +110,9 @@ export const PLANET_C = {
     hard: 'An old vulnerability gets pressed, which is uncomfortable but an opening for repair.',
     soft: 'Repair and goodwill come more easily, including toward others.',
     conj: 'A long-standing weakness surfaces so it can be addressed.',
-    hardTip: 'Be gentle. Get support rather than pushing through.',
+    hardTip: 'Go carefully. Get support rather than pushing through.',
     softTip: 'Share what has been learned. A long history can help others.',
-    avoid: 'Avoid harsh self-criticism.',
+    avoid: 'Avoid scapegoating and harsh internal blame.',
     inHouse: 'is touching tender ground in',
   },
 };
@@ -130,7 +131,7 @@ export const TARGET_C = {
   pluto: { arena: 'its power, resources and capacity to transform', gift: 'powerful renewal', risk: 'power struggles or crisis' },
   node: { arena: 'its path of growth and sense of destiny', gift: 'a clearer next step', risk: 'second-guessing its direction' },
   chiron: { arena: 'its oldest vulnerabilities and its capacity to repair', gift: 'repair and insight', risk: 'old problems reopening' },
-  asc: { arena: 'how it presents itself and moves through the world', gift: 'a fresh, confident public image', risk: 'feeling out of step or exposed' },
+  asc: { arena: 'how it presents itself and moves through the world', gift: 'a fresh, confident public image', risk: 'being out of step or exposed' },
   mc: { arena: 'its reputation, leadership and public standing', gift: 'recognition and momentum', risk: 'scrutiny and public pressure' },
 };
 

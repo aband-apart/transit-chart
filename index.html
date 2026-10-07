@@ -22,12 +22,12 @@
           <select id="profile-select" aria-label="Active chart"></select>
           <button id="add-profile" class="btn small" title="Add another chart">+ Add</button>
           <button id="edit-birth" class="btn small ghost">Edit</button>
-          <button id="manage-profiles" class="btn small ghost icon" title="Manage charts" aria-label="Manage charts">⋯</button>
+          <button id="manage-profiles" class="btn small ghost icon" title="More: manage charts" aria-label="More: edit, add, compare and manage charts" aria-haspopup="dialog">⋯</button>
           <label class="compare-switch">Compare with
             <select id="compare-select" aria-label="Compare with"></select>
           </label>
         </div>
-        <div id="profile-summary" class="profile-summary"></div>
+        <details id="profile-summary" class="profile-summary psum"></details>
       </header>
 
       <div id="demo-banner" class="demo-banner" hidden>
@@ -68,7 +68,7 @@
         </section>
 
         <section class="right">
-          <nav class="tabs" role="tablist">
+          <nav class="tabs" role="tablist" aria-label="Sections">
             <button role="tab" data-tab="wheel" class="tab mobile-only"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg><span class="lbl-long">Chart</span><span class="lbl-short">Chart</span></button>
             <button role="tab" data-tab="reading" class="tab active"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7"/></svg><span class="lbl-long">Reading</span><span class="lbl-short">Reading</span></button>
             <button role="tab" data-tab="transits" class="tab"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(-30 12 12)"/></svg><span class="lbl-long">Active transits</span><span class="lbl-short">Transits</span></button>
@@ -76,7 +76,7 @@
             <button role="tab" data-tab="natal" class="tab"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span class="lbl-long">Natal chart</span><span class="lbl-short">Natal</span></button>
             <button role="tab" data-tab="compare" class="tab" id="compare-tab" hidden><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg><span class="lbl-long">Compare</span><span class="lbl-short">Compare</span></button>
           </nav>
-          <div id="panel" class="panel"></div>
+          <div id="panel" class="panel" role="tabpanel" tabindex="-1"></div>
         </section>
       </main>
 
@@ -166,6 +166,27 @@
           <button type="submit" id="step-done" class="btn gold" hidden>Calculate</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="menu-dialog" aria-labelledby="menu-title">
+      <div class="menu">
+        <h2 id="menu-title">Charts</h2>
+        <ul class="menu-list">
+          <li><button type="button" id="menu-edit" class="btn">Edit this chart</button></li>
+          <li><button type="button" id="menu-add" class="btn">Add a chart</button></li>
+          <li id="menu-compare-row"><label>Compare with<select id="menu-compare" aria-label="Compare with"></select></label></li>
+          <li><button type="button" id="menu-manage" class="btn">Backup, import and delete…</button></li>
+        </ul>
+        <div class="actions"><span class="spacer"></span><button type="button" id="menu-close" class="btn ghost">Close</button></div>
+      </div>
+    </dialog>
+
+    <dialog id="filter-dialog" aria-labelledby="filter-title">
+      <div class="menu">
+        <h2 id="filter-title">Forecast filters</h2>
+        <div id="filter-body"></div>
+        <div class="actions"><button type="button" id="filter-reset" class="btn ghost">Reset</button><span class="spacer"></span><button type="button" id="filter-close" class="btn gold">Done</button></div>
+      </div>
     </dialog>
 
     <dialog id="guide-dialog" aria-labelledby="guide-title">

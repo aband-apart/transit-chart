@@ -9,6 +9,7 @@ import { initManage } from './ui/manage.js';
 import { PLANETS, SIGNS, HOUSES, PLACEMENT_LINE } from './data/astro-data.js';
 import { renderWheel } from './ui/wheel.js';
 import { aspectKey, aspectsFor, sameSelection } from './ui/selection.js';
+import { eventKind, firstSentence, groupEvents, activeFilterCount } from './lib/timeline.js';
 import { validateStep, firstInvalidStep, STEP_TITLES } from './lib/form-steps.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -44,6 +45,8 @@ const state = {
   renderToken: 0,
   selection: null,
   hadSaved: false,
+  forecastAnchor: null,
+  openEvents: new Set(),
   forecastDays: 90,
   filters: { aspect: true, station: true, ingress: true, lunation: true, outer: true, minor: false },
   cache: {},
@@ -130,11 +133,26 @@ function getForecast(jd, days) {
 /* ---------- views ---------- */
 function renderProfile() {
   const p = state.profile;
-  const n = state.natal;
-  const s = n.points;
-  $('#profile-summary').innerHTML = `<b>${esc(p.name || 'Your chart')}</b> · ${esc(p.date)}${p.timeUnknown ? '' : ' ' + esc(p.time)} · ${esc(p.place || `${(+p.lat).toFixed(2)}, ${(+p.lon).toFixed(2)}`)}
-    · ☉ ${SIGNS[s.sun.sign].name} · ☽ ${SIGNS[s.moon.sign].name}${p.timeUnknown ? '' : ` · Asc ${SIGNS[s.asc.sign].name}`}`;
+  const pts = state.natal.points;
+  const rising = p.timeUnknown ? '' : ` · ↑ ${SIGNS[pts.asc.sign].name}`;
+  const when = p.timeUnknown ? p.date : `${p.date} ${p.time}`;
+  const label = { self: 'Born', person: 'Born', place: 'Founded', event: 'Started' }[p.kind] ?? 'Born';
+  const el = $('#profile-summary');
+  el.innerHTML = `<summary aria-label="Chart details for ${esc(nameOf(p))}"><span class="nm">${esc(nameOf(p))}</span><span class="big3">☉ ${SIGNS[pts.sun.sign].name} · ☽ ${SIGNS[pts.moon.sign].name}${rising}</span></summary>
+    <div class="pdet">
+      <div><b>${label}</b><span>${esc(when)}${p.timeUnknown ? ' (time unknown)' : ''}</span></div>
+      <div><b>Place</b><span>${esc(p.place || `${(+p.lat).toFixed(2)}, ${(+p.lon).toFixed(2)}`)}</span></div>
+      <div><b>Time zone</b><span>${esc(p.tz)}</span></div>
+      <div><b>Houses</b><span>${esc(HOUSE_SYSTEMS[p.houseSystem ?? 'W'])}</span></div>
+    </div>`;
+  el.open = false;
 }
+
+// close the details popover when tapping elsewhere
+document.addEventListener('click', (e) => {
+  const d = $('#profile-summary');
+  if (d?.open && !d.contains(e.target)) d.open = false;
+});
 
 function renderWheelView() {
   const cmp = isCompareView();
@@ -268,8 +286,38 @@ function eventRow(e) {
   </div>`;
 }
 
-function section(title, body, { open = true, id = '' } = {}) {
-  return `<details class="sec" ${open ? 'open' : ''}${id ? ` id="${id}"` : ''}><summary>${title}</summary><div class="sec-body">${body}</div></details>`;
+function section(title, body, { open = true, id = '', count = '' } = {}) {
+  return `<details class="sec" ${open ? 'open' : ''}${id ? ` id="${id}"` : ''}><summary>${title}${count ? `<span class="count">${esc(count)}</span>` : ''}</summary><div class="sec-body">${body}</div></details>`;
+}
+
+const CLIMATE_LABEL = { demanding: 'Demanding', mixed: 'Mixed', supportive: 'Supportive' };
+
+/** One expandable transit: headline always visible, the full reading on demand. */
+function txItem(a, { open = false } = {}) {
+  const d = describeAspect(a, state.natal);
+  const key = aspectKey(a);
+  const labels = adviceLabels();
+  return `<details class="tx ${a.tone}" data-key="${key}" ${open ? 'open' : ''}>
+    <summary>
+      <span class="glyphs">${PLANETS[a.transit].glyph}${VS} ${a.glyph}${VS} ${PLANETS[a.target].glyph}${VS}</span>
+      <span class="ttl">${esc(d.title)}</span>
+      <span class="orbtag">${a.orb.toFixed(1)}° · ${esc(toneLabel[a.tone])}</span>
+      <span class="tsum">${esc(firstSentence(d.text, 150))}</span>
+    </summary>
+    <div class="tx-body">
+      <p>${esc(d.text)}</p>
+      <div class="chips">
+        <span class="chip t-${a.tone}">${toneLabel[a.tone]}</span>
+        <span class="chip ${a.orb < 1 ? 'hot' : ''}">orb ${a.orb.toFixed(1)}°${a.orb < 1 ? ' · tight' : ''}</span>
+        <span class="chip">${esc(d.timing)}</span>
+        ${a.retro ? '<span class="chip">retrograde</span>' : ''}
+      </div>
+      <p class="muted small">${esc(d.pace)}</p>
+      <div class="tipline"><b>${labels.tip}:</b> ${esc(d.tip)}</div>
+      ${d.avoid ? `<div class="tipline avoid"><b>${labels.avoid}:</b> ${esc(d.avoid)}</div>` : ''}
+      <p style="margin:12px 0 0"><button type="button" class="btn small" data-showchart="${key}">Show on chart</button></p>
+    </div>
+  </details>`;
 }
 
 function readingView() {
@@ -277,36 +325,44 @@ function readingView() {
   const mobile = isMobile();
   const reading = buildReading({ natal: state.natal, transit, aspects, events: [] });
   const sky = skyToday(state.natal, transit);
-  const top = aspects.slice(0, mobile ? 3 : 5);
+  const top = aspects.slice(0, mobile ? 3 : 4);
   const when = state.when.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const slots = '<p class="skeleton">Calculating…</p>';
+
+  const eight = aspects.slice(0, 8);
+  const hardN = eight.filter((a) => a.tone !== 'flowing').length;
+  const best = aspects[0];
+  const focus = reading.focusHouses.map((h) => `${ordinal(h)}: ${houseInfo(h).label}`);
+  const tiles = [
+    `<div class="tile t-${reading.climate === 'demanding' ? 'challenging' : reading.climate === 'supportive' ? 'flowing' : 'mixed'}"><span class="k">Climate</span><span class="v">${CLIMATE_LABEL[reading.climate]}</span><span class="s">${hardN} challenging · ${eight.length - hardN} flowing</span></div>`,
+    best ? `<button type="button" class="tile" data-open-tx="${aspectKey(best)}"><span class="k">Strongest transit</span><span class="v">${esc(describeAspect(best, state.natal).title)}</span><span class="s">${best.orb.toFixed(1)}° from exact</span></button>` : '',
+    `<div class="tile"><span class="k">Focus</span><span class="v">${esc(focus[0] || 'A quiet window')}</span><span class="s">${esc(focus[1] || '')}</span></div>`,
+    `<div class="tile"><span class="k">Moon</span><span class="v">${esc(sky.phase)}</span><span class="s">in ${esc(sky.moonSign)} · ${ordinal(sky.moonHouse)} house</span></div>`,
+    `<div class="tile"><span class="k">Retrograde</span><span class="v">${sky.retros.length ? esc(sky.retros.slice(0, 3).join(', ')) + (sky.retros.length > 3 ? ` +${sky.retros.length - 3}` : '') : 'None'}</span><span class="s">${sky.retros.length ? `${sky.retros.length} planet${sky.retros.length === 1 ? '' : 's'}` : 'All direct'}</span></div>`,
+    `<div class="tile" id="tile-next"><span class="k">Coming up</span><span class="v">…</span><span class="s">Calculating</span></div>`,
+  ].join('');
 
   return `
     ${state.natal.timeUnknown ? `<div class="banner">${esc(voice('Birth time unknown: houses are calculated from your Sun sign and angles (Asc/MC) are left out.'))}</div>` : ''}
     <section class="card lead">
-      <div class="eyebrow">${esc(when)}</div>
+      <div class="eyebrow">${esc(when)} · at a glance</div>
       <h2>${esc(reading.headline)}</h2>
-      <p>${esc(reading.climateText)} ${esc(reading.focusText)}</p>
-      <div class="sky">
-        <span><b>${esc(sky.phase)}</b> in ${esc(sky.moonSign)}</span>
-        <span>Moon in ${esc(possessive())} <b>${ordinal(sky.moonHouse)} house</b></span>
-        <span>Sun in <b>${esc(sky.sunSign)}</b></span>
-        ${sky.retros.length ? `<span>Retrograde: <b>${esc(sky.retros.join(', '))}</b></span>` : '<span>No planets retrograde</span>'}
-      </div>
+      <div class="glance">${tiles}</div>
+      <p class="lead-text">${esc(reading.climateText)} ${esc(reading.focusText)}</p>
     </section>
 
-    ${section(esc(voice("What's touching your chart")), top.length ? top.map((a) => aspectCard(a, jd, { withExact: false })).join('') + (aspects.length > top.length ? `<p class="muted small">More in the Active transits tab.</p>` : '') : `<p class="muted">${esc(voice('No tight transits to your natal chart right now, a quiet window.'))}</p>`)}
+    ${section(esc(voice('Most important transits')), top.length ? top.map((a, i) => txItem(a, { open: i === 0 })).join('') + (aspects.length > top.length ? `<p class="muted small">${aspects.length - top.length} more in the Active transits tab.</p>` : '') : `<p class="muted">${esc(voice('No tight transits to your natal chart right now, a quiet window.'))}</p>`, { count: top.length ? `${aspects.length} active` : '' })}
 
     ${section('Do and mind', `<div class="two">
       <div class="card"><div class="eyebrow">Lean into</div><ul class="plain">${reading.tips.do.map((t) => `<li>${esc(t.text)}<span class="src">${esc(t.source)}</span></li>`).join('')}</ul></div>
       <div class="card"><div class="eyebrow">Watch out for</div><ul class="plain">${reading.tips.avoid.length ? reading.tips.avoid.map((t) => `<li>${esc(t.text)}<span class="src">${esc(t.source)}</span></li>`).join('') : '<li class="muted">Nothing pressing, and this is a good window to move forward.</li>'}</ul></div>
-    </div>`)}
+    </div>`, { open: !mobile })}
 
-    ${section(esc(voice('The long game: slow planets in your houses')), reading.seasons.map((s) => `<div class="card"><h3>${esc(s.title)} · ${ordinal(s.house)} house</h3><p style="margin:0">${esc(s.text)}</p>${s.world ? `<p class="muted" style="margin:8px 0 0"><b>In the world:</b> ${esc(s.world)}</p>` : ''}</div>`).join(''), { open: !mobile })}
+    ${section(esc(voice('The long game: slow planets in your houses')), reading.seasons.map((s) => `<div class="card"><h3>${esc(s.title)} · ${ordinal(s.house)} house</h3><p style="margin:0">${esc(s.text)}</p>${s.world ? `<p class="muted" style="margin:8px 0 0"><b>In the world:</b> ${esc(s.world)}</p>` : ''}</div>`).join(''), { open: false, count: `${reading.seasons.length} placements` })}
 
-    ${section('The world calendar: next 12 months', `<div class="card" id="slot-world">${slots}</div>`, { open: !mobile })}
+    ${section('The world calendar: next 12 months', `<div class="card" id="slot-world">${slots}</div>`, { open: false })}
 
-    ${section("What's coming in the next 60 days", `<div class="card" id="slot-upcoming">${slots}</div>`, { open: !mobile })}
+    ${section("What's coming in the next 60 days", `<div class="card" id="slot-upcoming">${slots}</div>`, { open: false })}
 
     <p class="disclaimer">Astrology offers a framework for reflection. Read these as tendencies and timing, not fixed outcomes. For health, money or legal decisions, rely on qualified professionals.</p>`;
 }
@@ -321,14 +377,24 @@ function fillReadingLater(token) {
     const upcoming = reading.upcoming.filter((e) => e.type !== 'ingress' || SLOW.includes(e.transit) || e.transit === 'mars').slice(0, 10);
     const OUT = ['jupiter', 'saturn', 'uranus', 'neptune', 'pluto'];
     const worldCal = getForecast(jd, 365).filter((e) => e.type === 'outer' || (e.type === 'lunation' && e.eclipse) || (e.type === 'ingress' && OUT.includes(e.transit)) || (e.type === 'station' && OUT.includes(e.transit))).slice(0, 12);
-    const w = $('#slot-world');
-    const u = $('#slot-upcoming');
-    // exact dates for the top transit cards (computed after first paint)
-    for (const a of aspects.slice(0, isMobile() ? 3 : 5)) {
-      const chips = document.querySelector(`#panel .tcard[data-asp="${aspectKey(a)}"] .chips`);
+    // the "Coming up" tile
+    const next = upcoming[0];
+    const tile = $('#tile-next');
+    if (tile) {
+      if (next) {
+        const d = describeEvent(next, state.natal);
+        const when = jdToDate(next.jd).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        tile.outerHTML = `<button type="button" class="tile" data-goto-forecast><span class="k">Coming up</span><span class="v">${esc(when)}</span><span class="s">${esc(d.title)}</span></button>`;
+      } else tile.innerHTML = '<span class="k">Coming up</span><span class="v">Quiet</span><span class="s">Nothing major soon</span>';
+    }
+    // exact dates for the expanded transit cards
+    for (const a of aspects.slice(0, isMobile() ? 3 : 4)) {
+      const chips = document.querySelector(`#panel details.tx[data-key="${aspectKey(a)}"] .chips`);
       const text = chips && !chips.querySelector('.exact') ? exactText(a, jd) : '';
       if (text) chips.insertAdjacentHTML('beforeend', `<span class="chip hot exact">${esc(text)}</span>`);
     }
+    const w = $('#slot-world');
+    const u = $('#slot-upcoming');
     if (w) w.innerHTML = `${worldCal.length ? worldCal.map(eventRow).join('') : '<p class="muted">No major collective turning points ahead.</p>'}<p class="muted small" style="margin:12px 0 0">Collective themes are interpretive, a way to read the mood of an era rather than forecast specific headlines.</p>`;
     if (u) u.innerHTML = `${upcoming.length ? upcoming.map(eventRow).join('') : '<p class="muted">Nothing major on the calendar.</p>'}<p class="muted small" style="margin:12px 0 0">See the Forecast tab for the full calendar.</p>`;
   }, 30);
@@ -339,7 +405,7 @@ function transitsView() {
   const card = selectionCard();
   const rows = aspects.slice(0, 40).map((a) => {
     const max = aspects[0].strength;
-    return `<tr class="row ${aspectKey(a) === selectedAspect() ? 'selected' : ''}" data-asp="${aspectKey(a)}">
+    return `<tr class="row ${aspectKey(a) === selectedAspect() ? 'selected' : ''}" data-asp="${aspectKey(a)}" tabindex="0" aria-label="${esc(PLANETS[a.transit].name)} ${esc(a.aspect)} ${esc(natalLabel(a.target))}, orb ${a.orb.toFixed(2)} degrees">
       <td>${g(a.transit)}${esc(PLANETS[a.transit].name)}${a.retro ? ' ℞' : ''}</td>
       <td class="t-${a.tone}"><span class="g">${a.glyph}${VS}</span>${esc(a.aspect)}</td>
       <td>${g(a.target)}${esc(natalLabel(a.target).replace('natal ', ''))}</td>
@@ -356,19 +422,53 @@ function transitsView() {
     </table></div>`;
 }
 
+const FILTER_DEFAULTS = { aspect: true, station: true, ingress: true, lunation: true, outer: true, minor: false };
+const FILTER_DEFS = [
+  ['aspect', 'Transits', 'k-aspect'],
+  ['station', 'Stations', 'k-station'],
+  ['ingress', 'Sign changes', 'k-ingress'],
+  ['lunation', 'Moons & eclipses', 'k-lunation'],
+  ['outer', 'World cycles', 'k-outer'],
+  ['minor', 'Minor fast-planet aspects', 'k-aspect'],
+];
+const filterChips = () => FILTER_DEFS.map(([k, label, kc]) => `<button type="button" class="chip ${kc}" data-filter="${k}" aria-pressed="${!!state.filters[k]}"><span class="swatch"></span>${label}</button>`).join('');
+
+function fevRow(e) {
+  const d = describeEvent(e, state.natal);
+  const kind = eventKind(e);
+  const when = jdToDate(e.jd);
+  const id = `${e.type}-${Math.round(e.jd * 100)}-${e.transit ?? e.a ?? ''}-${e.aspect ?? e.phase ?? e.direction ?? ''}`;
+  const asp = e.type === 'aspect' ? aspectKey({ transit: e.transit, aspect: e.aspect, target: e.target }) : '';
+  return `<details class="fev k-${kind.key}${isBig(e) ? ' big' : ''}" data-ev="${esc(id)}" ${state.openEvents.has(id) ? 'open' : ''}>
+    <summary>
+      <div class="dt"><b>${when.getDate()}</b><span>${when.toLocaleDateString(undefined, { weekday: 'short' })}</span></div>
+      <div class="main">
+        <div class="ttl">${eventGlyph(e)} <span>${esc(d.title)}</span> <span class="kbadge"><i></i>${esc(kind.label)}</span></div>
+        <div class="tsum">${esc(firstSentence(d.text, 170))}</div>
+      </div>
+    </summary>
+    <div class="fev-body">
+      <p>${esc(d.text)}</p>
+      <button type="button" class="btn small" data-jump="${e.jd}" data-jump-asp="${esc(asp)}">Show on chart</button>
+    </div>
+  </details>`;
+}
+
 function forecastView() {
   const { jd } = current();
-  const events = getForecast(jd, state.forecastDays).filter((e) => state.filters[e.type] && (state.filters.minor || !isMinor(e)));
-  const chips = [['aspect', 'Exact aspects'], ['station', 'Stations'], ['ingress', 'Sign changes'], ['lunation', 'New & full moons'], ['outer', 'World cycles'], ['minor', 'Minor fast-planet aspects']]
-    .map(([k, l]) => `<span class="chip ${state.filters[k] ? 'on' : ''}" data-filter="${k}">${l}</span>`).join('');
-  let html = `<div class="filters">${chips}
-    <select id="fdays">${[30, 90, 180, 365].map((d) => `<option value="${d}" ${d === state.forecastDays ? 'selected' : ''}>Next ${d} days</option>`).join('')}</select></div>`;
-  let month = '';
-  for (const e of events) {
-    const m = jdToDate(e.jd).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    if (m !== month) { month = m; html += `<div class="month">${esc(m)}</div>`; }
-    html += eventRow(e);
-  }
+  const from = state.forecastAnchor ?? jd;
+  const events = getForecast(from, state.forecastDays).filter((e) => state.filters[e.type] && (state.filters.minor || !isMinor(e)));
+  const n = activeFilterCount(state.filters, FILTER_DEFAULTS);
+  const anchored = state.forecastAnchor !== null && Math.abs(state.forecastAnchor - jd) > 1;
+  const groups = groupEvents(events, from, state.forecastDays);
+  let html = `<div class="filters hide-m" role="group" aria-label="Event types">${filterChips()}</div>
+    <div class="fbar">
+      <button type="button" id="open-filters" class="btn only-m">Filters${n ? ` (${n})` : ''}</button>
+      <span class="spacer"></span>
+      <select id="fdays" aria-label="How far ahead">${[30, 90, 180, 365].map((d) => `<option value="${d}" ${d === state.forecastDays ? 'selected' : ''}>Next ${d} days</option>`).join('')}</select>
+    </div>
+    ${anchored ? `<p class="muted small">Showing events from ${esc(jdToDate(from).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }))}. <button type="button" class="linkish" data-follow>Follow the chart date</button></p>` : ''}`;
+  for (const g of groups) html += `<div class="fgroup-title">${esc(g.label)}</div>${g.items.map(fevRow).join('')}`;
   if (!events.length) html += '<p class="muted">No events match these filters.</p>';
   return html;
 }
@@ -458,7 +558,14 @@ function renderPanel() {
     $('#panel').innerHTML = view();
     if (state.tab === 'reading') fillReadingLater(token);
   }
-  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === state.tab));
+  document.querySelectorAll('.tab').forEach((t) => {
+    const on = t.dataset.tab === state.tab;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', String(on));
+    t.tabIndex = on ? 0 : -1; // roving tabindex: arrow keys move between tabs
+  });
+  const active = document.querySelector('.tab.active');
+  if (active) $('#panel').setAttribute('aria-labelledby', active.id);
 }
 
 function relativeDay(days) {
@@ -490,6 +597,7 @@ function renderAll({ keepScroll = true } = {}) {
 /* ---------- interactions ---------- */
 function setWhen(d) {
   state.when = d;
+  state.forecastAnchor = null;
   state.selection = null;
   renderAll();
 }
@@ -516,6 +624,30 @@ function selectPlanet(side, key, { fromWheel = true } = {}) {
   afterSelect({ fromWheel });
 }
 
+/** Move the chart to a forecast event's date (and select its aspect), keeping the forecast list where it was. */
+function jumpTo(jd, aspKey) {
+  state.forecastAnchor ??= current().jd;
+  state.when = jdToDate(jd);
+  state.selection = aspKey ? { aspect: aspKey } : null;
+  if (isMobile()) state.tab = 'wheel';
+  renderAll({ keepScroll: false });
+  if (isMobile()) window.scrollTo(0, 0);
+}
+
+function refreshFilterDialog() {
+  const dlg2 = $('#filter-dialog');
+  if (!dlg2.open) return;
+  $('#filter-body').innerHTML = `<div class="fgroup"><div class="eyebrow">Event types</div><div class="fchips">${filterChips()}</div></div>`;
+}
+$('#filter-close').addEventListener('click', () => $('#filter-dialog').close());
+$('#filter-reset').addEventListener('click', () => { Object.assign(state.filters, FILTER_DEFAULTS); renderPanel(); refreshFilterDialog(); });
+// remember which forecast events are expanded, so re-renders (e.g. after "Show on chart") keep them open
+document.addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (!(d instanceof HTMLDetailsElement) || !d.dataset.ev) return;
+  if (d.open) state.openEvents.add(d.dataset.ev); else state.openEvents.delete(d.dataset.ev);
+}, true);
+
 document.addEventListener('click', (e) => {
   const pl = e.target.closest('[data-pl]');
   if (pl) {
@@ -528,15 +660,41 @@ document.addEventListener('click', (e) => {
   const tab = e.target.closest('.tab');
   if (tab) { state.tab = tab.dataset.tab; state.selection = null; renderAll({ keepScroll: false }); if (isMobile()) window.scrollTo(0, 0); return; }
   const f = e.target.closest('[data-filter]');
-  if (f) { state.filters[f.dataset.filter] = !state.filters[f.dataset.filter]; renderPanel(); return; }
+  if (f) { state.filters[f.dataset.filter] = !state.filters[f.dataset.filter]; renderPanel(); refreshFilterDialog(); return; }
+  const jump = e.target.closest('[data-jump]');
+  if (jump) { jumpTo(+jump.dataset.jump, jump.dataset.jumpAsp); return; }
+  if (e.target.closest('[data-follow]')) { state.forecastAnchor = null; renderPanel(); return; }
+  if (e.target.closest('#open-filters')) { $('#filter-dialog').showModal(); refreshFilterDialog(); return; }
+  const openTx = e.target.closest('[data-open-tx]');
+  if (openTx) {
+    const d = document.querySelector(`#panel details.tx[data-key="${openTx.dataset.openTx}"]`);
+    if (d) { d.open = true; d.scrollIntoView({ block: 'center', behavior: reduceMotion() ? 'auto' : 'smooth' }); }
+    return;
+  }
+  const show = e.target.closest('[data-showchart]');
+  if (show) { state.selection = { aspect: show.dataset.showchart }; if (isMobile()) state.tab = 'wheel'; renderAll({ keepScroll: false }); window.scrollTo(0, 0); return; }
+  if (e.target.closest('[data-goto-forecast]')) { state.tab = 'forecast'; state.selection = null; renderAll({ keepScroll: false }); window.scrollTo(0, 0); return; }
   const sh = e.target.closest('[data-shift]');
   if (sh) setWhen(new Date(state.when.getTime() + +sh.dataset.shift * 86400000));
+});
+
+document.querySelectorAll('.tab').forEach((t) => { t.id = `tab-${t.dataset.tab}`; t.setAttribute('aria-controls', 'panel'); });
+document.querySelector('.tabs').addEventListener('keydown', (e) => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const tabs = [...document.querySelectorAll('.tab')].filter((t) => !t.hidden && t.offsetParent !== null);
+  const i = tabs.indexOf(document.activeElement);
+  if (i < 0) return;
+  e.preventDefault();
+  const next = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  tabs[next].focus();
+  tabs[next].click();
+  tabs[next].focus();
 });
 
 // keyboard: SVG planets and lines act like buttons
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
-  const el = e.target.closest?.('#wheel [role="button"], #landing-wheel[role="button"]');
+  const el = e.target.closest?.('#wheel [role="button"], #landing-wheel[role="button"], tr.row[data-asp]');
   if (!el) return;
   e.preventDefault();
   el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -549,6 +707,7 @@ document.addEventListener('change', (e) => {
 let scrubTimer = null;
 $('#scrub').addEventListener('input', (e) => {
   state.when = new Date(state.now.getTime() + +e.target.value * 86400000);
+  state.forecastAnchor = null;
   state.selection = null;
   renderWheelView();
   renderTimebar();
@@ -713,7 +872,9 @@ function renderProfileControls() {
   if (!others.some((p) => p.id === state.compareId)) state.compareId = '';
   $('#compare-select').innerHTML = `<option value="">None</option>` + others.map((p) => `<option value="${p.id}" ${p.id === state.compareId ? 'selected' : ''}>${esc(nameOf(p))}</option>`).join('');
   $('.compare-switch').hidden = others.length === 0;
-  $('#compare-tab').hidden = !state.compareId;
+  $('.tab[data-tab="compare"]').hidden = !state.compareId;
+  $('#menu-compare').innerHTML = $('#compare-select').innerHTML;
+  $('#menu-compare-row').hidden = others.length === 0;
 }
 
 function activate(id, { keepTab = false } = {}) {
@@ -722,6 +883,7 @@ function activate(id, { keepTab = false } = {}) {
   setSubject(state.profile.name, state.profile.kind);
   state.natal = natalOf(state.profile);
   state.cache = {};
+  state.forecastAnchor = null;
   state.selection = null;
   state.now = new Date();
   state.when = new Date();
@@ -778,7 +940,13 @@ const manage = initManage({
   describe: (p) => ({ name: nameOf(p), sub: `${KIND_LABEL[p.kind] ?? 'Person'} · ${p.date}` }),
   newId: uid,
 });
-$('#manage-profiles').addEventListener('click', () => manage.open());
+const menuDlg = $('#menu-dialog');
+$('#manage-profiles').addEventListener('click', () => { if (isMobile()) menuDlg.showModal(); else manage.open(); });
+$('#menu-close').addEventListener('click', () => menuDlg.close());
+$('#menu-edit').addEventListener('click', () => { menuDlg.close(); openForm('edit'); });
+$('#menu-add').addEventListener('click', () => { menuDlg.close(); openForm('add'); });
+$('#menu-manage').addEventListener('click', () => { menuDlg.close(); manage.open(); });
+$('#menu-compare').addEventListener('change', (e) => { menuDlg.close(); $('#compare-select').value = e.target.value; $('#compare-select').dispatchEvent(new Event('change')); });
 
 function showEmpty() {
   state.profile = null;
@@ -835,7 +1003,6 @@ $('#compare-select').addEventListener('change', (e) => {
 });
 
 mq.addEventListener('change', () => {
-  $('#timeadjust').open = !isMobile();
   if (state.profile) renderAll({ keepScroll: false }); else renderLanding();
 });
 
@@ -885,8 +1052,6 @@ async function boot() {
     throw err;
   }
   $('#loading').hidden = true;
-  $('#timeadjust').open = !isMobile();
-
   const params = new URLSearchParams(location.search);
   state.tab = params.get('tab') || (isMobile() ? 'wheel' : 'reading');
   if (isMobile()) state.forecastDays = 30;
