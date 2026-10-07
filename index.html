@@ -22,6 +22,7 @@
           <select id="profile-select" aria-label="Active chart"></select>
           <button id="add-profile" class="btn small" title="Add another chart">+ Add</button>
           <button id="edit-birth" class="btn small ghost">Edit</button>
+          <button id="manage-profiles" class="btn small ghost icon" title="Manage charts" aria-label="Manage charts">⋯</button>
           <label class="compare-switch">Compare with
             <select id="compare-select" aria-label="Compare with"></select>
           </label>
@@ -78,13 +79,14 @@
     <dialog id="birth-dialog">
       <form id="birth-form" method="dialog" autocomplete="off">
         <h2 id="form-title">Birth details</h2>
-        <p class="hint" id="kind-hint">For a country, organization or event, use the founding or start moment. Time and place matter, and many have disputed times.</p>
+        <p class="hint" id="kind-hint"></p>
         <p class="hint">Stored only in this browser (localStorage). A place lookup sends just the city name to Open-Meteo's geocoder.</p>
         <div class="row">
           <label>Name<input name="name" type="text" placeholder="e.g. Alex, USA, Acme Inc." /></label>
           <label>Type
             <select name="kind">
-              <option value="person">Person</option>
+              <option value="self">Me</option>
+              <option value="person">Another person</option>
               <option value="place">Country or place</option>
               <option value="event">Event or organization</option>
             </select>
@@ -124,6 +126,69 @@
           <button type="submit" class="btn gold">Calculate</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="manage-dialog" aria-labelledby="manage-title">
+      <div class="manage">
+        <h2 id="manage-title">Manage charts</h2>
+        <p id="manage-status" class="status" role="status" aria-live="polite" hidden></p>
+
+        <div id="manage-main">
+          <p id="manage-count" class="hint"></p>
+          <ul id="manage-list" class="manage-list"></ul>
+          <div class="manage-actions">
+            <button type="button" id="export-charts" class="btn">Export charts</button>
+            <label class="btn file-btn" for="import-file">Import charts…</label>
+            <input id="import-file" type="file" accept="application/json,.json" hidden />
+          </div>
+          <p class="hint">Exported files contain birth details, so keep them private. They work as a backup and as a way to move charts to another browser or device.</p>
+          <div class="danger-zone">
+            <h3>Delete all charts in this browser</h3>
+            <p class="hint">This removes every chart saved here and returns the app to its first-visit state. It does not delete copies in other browsers or devices, or any backup files you exported.</p>
+            <button type="button" id="delete-all" class="btn danger">Delete all charts…</button>
+          </div>
+        </div>
+
+        <div id="manage-import" hidden>
+          <h3>Import preview</h3>
+          <p id="import-summary"></p>
+          <ul id="import-details" class="manage-list"></ul>
+          <fieldset class="choice">
+            <legend>How should these charts be added?</legend>
+            <label><input type="radio" name="import-mode" value="merge" checked /> <b>Merge</b>: keep my saved charts and add the new ones. Charts that match an existing one are skipped.</label>
+            <label><input type="radio" name="import-mode" value="replace" /> <b>Replace</b>: remove my saved charts here and use only the charts in this file.</label>
+          </fieldset>
+          <div id="import-replace-warning" class="warning" hidden>
+            <p id="import-replace-text"></p>
+            <button type="button" id="import-backup-first" class="btn small">Export a backup first</button>
+            <label class="check"><input type="checkbox" id="import-replace-ok" /> I understand this replaces my saved charts.</label>
+          </div>
+          <div class="actions">
+            <button type="button" id="import-back" class="btn ghost">Back</button>
+            <span class="spacer"></span>
+            <button type="button" id="import-go" class="btn gold">Import</button>
+          </div>
+        </div>
+
+        <div id="manage-delete" hidden>
+          <h3>Delete all charts?</h3>
+          <p id="delete-summary"></p>
+          <ul id="delete-list" class="manage-list"></ul>
+          <button type="button" id="delete-backup-first" class="btn small">Export a backup first</button>
+          <p class="hint">This can't be undone. Copies in other browsers or devices, and exported files, are not affected.</p>
+          <label class="check"><input type="checkbox" id="delete-ok" /> I understand these charts will be permanently removed from this browser.</label>
+          <div class="actions">
+            <button type="button" id="delete-cancel" class="btn ghost">Cancel</button>
+            <span class="spacer"></span>
+            <button type="button" id="delete-confirm" class="btn danger solid" disabled>Delete all</button>
+          </div>
+        </div>
+
+        <div class="actions" id="manage-footer">
+          <span class="spacer"></span>
+          <button type="button" id="manage-close" class="btn ghost">Close</button>
+        </div>
+      </div>
     </dialog>
 
     <script type="module" src="/src/main.js"></script>

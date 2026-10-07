@@ -30,6 +30,15 @@ Add `?demo=1` to the URL to load an example chart, or `?demo=2&tab=compare` for 
 
 Unknown birth time is supported: houses fall back to Sun-sign whole houses and Asc/MC are omitted.
 
+## Saved charts, backups and wording
+
+Each chart has a type: **Me** (readings say "you"), **Another person** (their name and "they", advice written about them), or **Country/place** and **Event/organization** (the name and "it", never treated as a person).
+
+**⋯ Manage charts** lets you:
+- **Export** all saved charts to a JSON backup (it contains birth details, so keep it private).
+- **Import** a backup with a preview first: new charts, skipped duplicates, and any that can't be imported (with reasons). Choose **Merge** (keep mine, add new) or **Replace** (an explicit second confirmation, with an option to export a backup first). Files are validated and rebuilt from known fields only.
+- **Delete all charts in this browser** after a confirmation that shows how many are affected and offers an export. This returns the app to its first-visit state. It doesn't touch other browsers/devices or exported files.
+
 ## On your phone
 
 The page has a dedicated phone layout: a bottom tab bar (Chart, Reading, Transits, Forecast, Natal, Compare), a wheel with larger glyphs and tap-friendly lines (tap a line to read it under the wheel), collapsible sections, and a bottom-sheet form with touch-sized inputs.

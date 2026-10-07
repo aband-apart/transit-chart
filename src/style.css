@@ -322,3 +322,27 @@ details.sec > .sec-body { margin-top: 10px; }
   .wheel-wrap { max-width: 70vh; margin-left: auto; margin-right: auto; }
 }
 .place-row .btn { white-space: nowrap; flex: none; }
+
+/* ---------- manage charts ---------- */
+.btn.icon { min-width: 40px; font-size: 20px; line-height: 1; padding: 4px 10px; }
+.manage h3 { font-size: 17px; margin: 18px 0 6px; }
+.manage-list { list-style: none; margin: 8px 0; padding: 0; max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+.manage-list:empty { display: none; }
+.manage-list li { padding: 8px 12px; border-bottom: 1px solid #23234a; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; }
+.manage-list li:last-child { border-bottom: none; }
+.manage-list .sub { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.manage-list li.bad { color: var(--hard); }
+.manage-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 6px; }
+.file-btn { display: inline-flex; align-items: center; cursor: pointer; }
+.danger-zone { margin-top: 22px; padding: 14px; border: 1px solid #ff7b7b44; border-radius: 12px; background: #ff7b7b0d; }
+.danger-zone h3 { margin-top: 0; color: var(--hard); }
+.btn.danger.solid { background: var(--hard); color: #1a1530; border-color: var(--hard); font-weight: 600; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.choice { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 12px; margin: 14px 0; }
+.choice legend { padding: 0 6px; color: var(--muted); font-size: 13px; }
+.choice label { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; color: var(--ink); font-size: 14px; }
+.warning { border: 1px solid #e6c36a55; background: #e6c36a12; border-radius: 12px; padding: 12px 14px; margin: 10px 0; font-size: 14px; }
+.warning p { margin: 0 0 8px; }
+.status { padding: 8px 12px; border-radius: 10px; background: #5fd6c61a; border: 1px solid #5fd6c655; color: var(--flow); font-size: 14px; margin: 8px 0; }
+.status.error { background: #ff7b7b14; border-color: #ff7b7b55; color: var(--hard); }
+@media (max-width: 760px) { .manage-actions .btn { flex: 1 1 auto; justify-content: center; } }

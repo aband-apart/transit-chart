@@ -13,34 +13,88 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const house = (n) => HOUSES[n - 1];
 const sign = (i) => SIGNS[i];
 
-// ---- Voice: render second-person text in the chart's own name ----
-let SUBJECT = null; // null = speak to the reader ("you/your")
+// ---- Voice: who is the reading about? ----
+// 'self'   -> speak to the reader ("you/your")
+// 'person' -> another person: their name, "they/their"
+// 'place' / 'event' -> not a person: the name, "it/its", with verbs agreeing
+let SUBJECT = null; // null = address the reader
 
-export function setSubject(name) {
-  SUBJECT = name ? String(name).trim() : null;
+export function setSubject(name, kind = 'person') {
+  if (kind === 'self') { SUBJECT = null; return; }
+  const n = name ? String(name).trim() : '';
+  SUBJECT = { name: n || (kind === 'person' ? 'this person' : 'this chart'), mode: kind === 'person' ? 'they' : 'it' };
 }
+
+export const isSelfVoice = () => SUBJECT === null;
 
 // Words after which "you" is an object ("with you", "mirror you") rather than a subject ("you need").
 const OBJECT_CUES = 'with|around|mirror|mirrors|see|sees|for|to|asks|ask|tests|test|calls|call|pulls|pull|pushes|push|helps|help|hit|hits|gives|give|tells|tell|makes|make|lets|about|toward|towards|of|at|like|than|from|by|on|upon|into|onto|beyond|behind|near|needs';
 const OBJECT_RE = new RegExp(`\\b(${OBJECT_CUES})(\\s+)you\\b`, 'gi');
+const MODALS = new Set(['can', 'could', 'will', 'would', 'should', 'may', 'might', 'must', 'shall', 'cannot']);
+const ADVERBS = 'actually|also|just|only|still|never|always|really|often|usually|simply|ever|already|even';
+const IRREGULAR = { have: 'has', are: 'is', were: 'was', do: 'does', go: 'goes', "don't": "doesn't" };
+
+function conjugate3(word) {
+  const w = word.toLowerCase();
+  if (IRREGULAR[w]) return IRREGULAR[w];
+  if (/(s|sh|ch|x|z|o)$/.test(w)) return `${w}es`;
+  if (/[^aeiou]y$/.test(w)) return `${w.slice(0, -1)}ies`;
+  return `${w}s`;
+}
 
 /** Possessive form of the subject name, e.g. "Alex's" or "Chris'". */
-export const possessive = () => (SUBJECT ? (/s$/i.test(SUBJECT) ? `${SUBJECT}'` : `${SUBJECT}'s`) : 'your');
+export const possessive = () => (SUBJECT ? (/s$/i.test(SUBJECT.name) ? `${SUBJECT.name}'` : `${SUBJECT.name}'s`) : 'your');
 
-/** Rewrite "you/your" in generated text to match the subject's name. No-op when there is no name. */
+/** Rewrite "you/your" in generated text to match the chart's subject. No-op for a self chart. */
 export function voice(text) {
   if (!SUBJECT || !text) return text;
   const poss = possessive();
-  return text
+  const it = SUBJECT.mode === 'it';
+  let out = text
     .replace(/\bYour\b/g, poss)
     .replace(/\byour\b/g, poss)
-    .replace(/\byourself\b/g, 'themselves')
-    .replace(/\bYou're\b/g, "They're")
-    .replace(/\byou're\b/g, "they're")
-    .replace(/\byou've\b/g, "they've")
-    .replace(OBJECT_RE, (_, cue, sp) => `${cue}${sp}them`)
-    .replace(/\bYou\b/g, 'They')
-    .replace(/\byou\b/g, 'they');
+    .replace(/\byourself\b/g, it ? 'itself' : 'themselves')
+    .replace(OBJECT_RE, (_, cue, sp) => `${cue}${sp}${it ? 'it' : 'them'}`);
+  if (it) {
+    out = out
+      .replace(/\b(You|you)'re\b/g, (_, y) => (y === 'You' ? "It's" : "it's"))
+      .replace(/\b(You|you)'ve\b/g, (_, y) => (y === 'You' ? "It's" : "it's"))
+      .replace(new RegExp(`\\b(You|you)((?:\\s+(?:${ADVERBS}))*)\\s+([A-Za-z']+)`, 'g'), (_, y, adv, verb) => `${y === 'You' ? 'It' : 'it'}${adv} ${MODALS.has(verb.toLowerCase()) ? verb : conjugate3(verb)}`)
+      .replace(/\bYou\b/g, 'It')
+      .replace(/\byou\b/g, 'it');
+  } else {
+    out = out
+      .replace(/\bYou're\b/g, "They're").replace(/\byou're\b/g, "they're").replace(/\byou've\b/g, "they've")
+      .replace(/\bYou\b/g, 'They').replace(/\byou\b/g, 'they');
+  }
+  return out;
+}
+
+const IMPERATIVES = new Set(['pace', 'put', 'name', 'trust', 're-read', 'pitch', 'say', 'plan', 'channel', 'take', 'do', 'avoid', 'stop', 'choose', 'invest', 'share', 'be', 'get', 'make', 'commit', 'experiment', 'verify', 'ask', 'leave', 'keep', 'stay', 'set']);
+
+/**
+ * Advice lines are written as direct imperatives ("Pace yourself."). For a self chart they stay as written;
+ * for anyone or anything else they become suggestions about that subject.
+ */
+export function advice(text) {
+  if (!SUBJECT || !text) return text;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
+  let first = true;
+  const out = sentences.map((raw) => {
+    const sentence = raw.trim();
+    const head = sentence.split(/\s+/)[0].replace(/[^A-Za-z-]/g, '').toLowerCase();
+    if (!IMPERATIVES.has(head)) return sentence;
+    const body = sentence.replace(/[.!?]+$/, '');
+    const lower = body.charAt(0).toLowerCase() + body.slice(1);
+    let rewritten;
+    if (/^do not /i.test(body)) rewritten = `${SUBJECT.name} may ${first ? '' : 'also '}do well not to ${body.slice(7)}`;
+    else rewritten = first ? `${SUBJECT.name} may do well to ${lower}` : `${SUBJECT.name} can also ${lower}`;
+    first = false;
+    return `${rewritten}.`;
+  });
+  // inside advice the subject is already named, so possessives become pronouns instead of repeating the name
+  const own = SUBJECT.mode === 'it' ? ['Its', 'its'] : ['Their', 'their'];
+  return voice(out.join(' ').replace(/\bYour\b/g, own[0]).replace(/\byour\b/g, own[1]));
 }
 
 export const natalLabel = (k) => (k === 'asc' || k === 'mc' || k === 'dsc' || k === 'ic' ? PLANETS[k].name : `natal ${PLANETS[k].name}`);
@@ -87,8 +141,8 @@ export function describeAspect(a, natal) {
     text: voice(parts.join(' ')),
     note: voice(A.note),
     pace: voice(P.pace),
-    tip: hard ? P.hardTip : P.softTip,
-    avoid: hard ? P.avoid : null,
+    tip: advice(hard ? P.hardTip : P.softTip),
+    avoid: hard ? advice(P.avoid) : null,
     timing: a.applying ? 'approaching exact' : 'easing off for now',
   };
 }
@@ -252,8 +306,8 @@ export function buildReading({ natal, transit, aspects, events }) {
     seen.add(a.transit);
     const P = PLANETS[a.transit];
     const hard = a.tone !== 'flowing';
-    doTips.push({ source: `${P.name} ${ASPECT_TEXT[a.aspect].name} ${natalLabel(a.target)}`, text: hard ? P.hardTip : P.softTip });
-    if (hard) avoidTips.push({ source: P.name, text: P.avoid });
+    doTips.push({ source: `${P.name} ${ASPECT_TEXT[a.aspect].name} ${natalLabel(a.target)}`, text: advice(hard ? P.hardTip : P.softTip) });
+    if (hard) avoidTips.push({ source: P.name, text: advice(P.avoid) });
   }
 
   // Predictions: the next ~60 days of significant events

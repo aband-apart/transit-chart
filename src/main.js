@@ -4,7 +4,9 @@ import { natalFromBirth, buildChart, formatPos, houseOf, withSolarHouses, HOUSE_
 import { transitAspects, synastryAspects } from './astro/aspects.js';
 import { forecast, aspectPasses, outerAspects } from './astro/transits.js';
 import { isValidTimeZone } from './astro/time.js';
-import { describeAspect, describeEvent, buildReading, skyToday, natalPortrait, natalLabel, ordinal, describeSynastry, compareSummary, setSubject, voice, possessive } from './astro/interpret.js';
+import { describeAspect, describeEvent, buildReading, skyToday, natalPortrait, natalLabel, ordinal, describeSynastry, compareSummary, setSubject, voice, possessive, isSelfVoice } from './astro/interpret.js';
+import { migrateKind } from './lib/charts-io.js';
+import { initManage } from './ui/manage.js';
 import { PLANETS, SIGNS, HOUSES, PLACEMENT_LINE } from './data/astro-data.js';
 import { renderWheel } from './ui/wheel.js';
 
@@ -13,7 +15,13 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const VS = '︎';
 const STORE_KEY = 'transit-chart.profiles';
 const LEGACY_KEY = 'transit-chart.profile';
-const KIND_LABEL = { person: 'Person', place: 'Country / place', event: 'Event / org' };
+const KIND_LABEL = { self: 'Me', person: 'Person', place: 'Country / place', event: 'Event / org' };
+const KIND_HINT = {
+  self: 'Your own chart. Readings speak to you directly ("you", "your").',
+  person: 'Someone else. Readings use their name and "they", and advice is written about them.',
+  place: 'For a country or place, use its founding moment. Readings refer to it by name, and many founding times are debated.',
+  event: 'For an organization or event, use its start moment. Readings refer to it by name, and the exact time matters.',
+};
 const mq = window.matchMedia('(max-width: 760px)');
 const isMobile = () => mq.matches;
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -68,6 +76,7 @@ function natalOf(profile) {
 }
 
 const nameOf = (p) => p.name || KIND_LABEL[p.kind] || 'Chart';
+const adviceLabels = () => (isSelfVoice() ? { tip: 'Try', avoid: 'Mind' } : { tip: 'Suggestion', avoid: 'Worth watching' });
 const compareProfile = () => state.profiles.find((p) => p.id === state.compareId && p.id !== state.activeId) || null;
 const isCompareView = () => state.tab === 'compare' && !!compareProfile();
 
@@ -177,8 +186,8 @@ function aspectCard(a, jd, { withExact = true } = {}) {
       ${exact ? `<span class="chip hot">${esc(exact)}</span>` : ''}
     </div>
     <p class="muted small" style="margin-top:8px">${esc(d.pace)}</p>
-    <div class="tipline"><b>Try:</b> ${esc(d.tip)}</div>
-    ${d.avoid ? `<div class="tipline avoid"><b>Mind:</b> ${esc(d.avoid)}</div>` : ''}
+    <div class="tipline"><b>${adviceLabels().tip}:</b> ${esc(d.tip)}</div>
+    ${d.avoid ? `<div class="tipline avoid"><b>${adviceLabels().avoid}:</b> ${esc(d.avoid)}</div>` : ''}
   </article>`;
 }
 
@@ -359,7 +368,7 @@ function compareView() {
   const sum = compareSummary(c.aspects, c.nameA, c.nameB);
   const top = c.aspects.slice(0, 10);
   const li = (x) => `<li>${esc(x.title)}<span class="src">${esc(x.text)}</span></li>`;
-  const unusual = c.pa.kind !== 'person' || c.pb.kind !== 'person';
+  const unusual = ['place', 'event'].includes(c.pa.kind) || ['place', 'event'].includes(c.pb.kind);
   return `
     ${c.A.timeUnknown || c.B.timeUnknown ? '<div class="banner">One chart has no birth time, so Ascendant and Midheaven contacts are left out, and house overlays use Sun-sign houses.</div>' : ''}
     <section class="card lead">
@@ -462,6 +471,7 @@ const dlg = $('#birth-dialog');
 const form = $('#birth-form');
 
 let editingId = null;
+const updateKindHint = () => { $('#kind-hint').textContent = KIND_HINT[form.elements.kind.value] ?? ''; };
 
 function fillForm(p) {
   form.elements.kind.value = p.kind || 'person';
@@ -476,10 +486,12 @@ function openForm(mode = 'edit') {
   editingId = mode === 'edit' && state.profile ? state.profile.id : null;
   $('#form-title').textContent = editingId ? 'Edit chart' : state.profiles.length ? 'Add a chart' : 'Birth details';
   $('#delete-profile').hidden = !editingId;
-  fillForm(editingId ? state.profile : { time: '12:00', tz: Intl.DateTimeFormat().resolvedOptions().timeZone, kind: state.profiles.length ? 'person' : 'person' });
+  fillForm(editingId ? state.profile : { time: '12:00', tz: Intl.DateTimeFormat().resolvedOptions().timeZone, kind: state.profiles.length ? 'person' : 'self' });
+  updateKindHint();
   dlg.showModal();
 }
 
+form.elements.kind.addEventListener('change', updateKindHint);
 form.elements.timeUnknown.addEventListener('change', (e) => { form.elements.time.disabled = e.target.checked; });
 $('#cancel').addEventListener('click', () => dlg.close());
 $('#example').addEventListener('click', () => fillForm(EXAMPLE));
@@ -490,7 +502,7 @@ $('#delete-profile').addEventListener('click', () => {
   if (!editingId || !confirm('Delete this chart from this browser?')) return;
   state.profiles = state.profiles.filter((p) => p.id !== editingId);
   dlg.close();
-  if (state.profiles.length) activate(state.profiles[0].id); else { state.activeId = null; saveStore(); showEmpty(); }
+  if (state.profiles.length) activate(state.profiles[0].id); else clearEverything();
 });
 
 async function lookup() {
@@ -553,7 +565,7 @@ function renderProfileControls() {
 function activate(id, { keepTab = false } = {}) {
   state.activeId = id;
   state.profile = state.profiles.find((p) => p.id === id);
-  setSubject(state.profile.name || (state.profile.kind === 'person' ? '' : 'this chart'));
+  setSubject(state.profile.name, state.profile.kind);
   state.natal = natalOf(state.profile);
   state.cache = {};
   state.selected = null;
@@ -567,6 +579,42 @@ function activate(id, { keepTab = false } = {}) {
   renderProfile();
   renderAll({ keepScroll: false });
 }
+
+function clearStore() {
+  for (const k of [STORE_KEY, LEGACY_KEY]) { try { localStorage.removeItem(k); } catch { /* storage unavailable */ } }
+}
+
+/** Replace the whole saved list (import / merge) and refresh the app around it. */
+function applyProfiles(list) {
+  state.profiles = list;
+  natalCache.clear();
+  forecastCache.clear();
+  if (!list.length) { clearEverything(); return; }
+  activate(list.some((p) => p.id === state.activeId) ? state.activeId : list[0].id, { keepTab: true });
+}
+
+/** Delete every saved chart in this browser and return to the first-visit state. */
+function clearEverything() {
+  state.profiles = [];
+  state.activeId = null;
+  state.compareId = '';
+  state.tab = isMobile() ? 'wheel' : 'reading';
+  natalCache.clear();
+  forecastCache.clear();
+  state.cache = {};
+  clearStore();
+  setSubject('', 'self');
+  showEmpty();
+}
+
+const manage = initManage({
+  getProfiles: () => state.profiles,
+  applyProfiles,
+  clearEverything,
+  describe: (p) => ({ name: nameOf(p), sub: `${KIND_LABEL[p.kind] ?? 'Person'} · ${p.date}` }),
+  newId: uid,
+});
+$('#manage-profiles').addEventListener('click', () => manage.open());
 
 function showEmpty() {
   state.profile = null;
@@ -618,7 +666,7 @@ async function boot() {
       }
     } catch { /* ignore */ }
     if (store?.profiles?.length) {
-      state.profiles = store.profiles;
+      state.profiles = store.profiles.map((p) => ({ ...p, kind: migrateKind(p) }));
       state.compareId = store.compareId || '';
       activate(state.profiles.some((p) => p.id === store.activeId) ? store.activeId : state.profiles[0].id, { keepTab: true });
     } else showEmpty();
