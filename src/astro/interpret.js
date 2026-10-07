@@ -120,10 +120,14 @@ const LEADS_NOT = [
   (n) => `It could help ${n} not to`,
   (n) => `A good move for ${n} is not to`,
 ];
-const LEADS_AVOID = [
-  (n) => `${n} may do well to`,
-  (n) => `It could help ${n} to`,
-  (n) => `A good move for ${n} is to`,
+// "Avoid X" is rewritten with the verb in the lead-in where that reads naturally ("may do well to avoid X"),
+// or with a different verb ("might steer clear of X"), so a run of avoid-lines doesn't sound templated.
+const AVOID_FORMS = [
+  (n, x) => `${n} may do well to avoid ${x}`,
+  (n, x) => `${n} might steer clear of ${x}`,
+  (n, x) => `It could help ${n} to avoid ${x}`,
+  (n, x) => `${n} could hold back from ${x}`,
+  (n, x) => `A good move for ${n} is to avoid ${x}`,
 ];
 const LEADS_NEXT = [
   (n) => `${n} can also`,
@@ -153,7 +157,7 @@ export function advice(text, index) {
     const N = SUBJECT.name;
     let rewritten;
     if (/^do not /i.test(body)) rewritten = `${LEADS_NOT[(seed + k) % LEADS_NOT.length](N)} ${body.slice(7)}`;
-    else if (first && head === 'avoid') rewritten = `${LEADS_AVOID[seed % LEADS_AVOID.length](N)} ${lower}`;
+    else if (first && head === 'avoid') rewritten = AVOID_FORMS[seed % AVOID_FORMS.length](N, body.replace(/^avoid\s+/i, ''));
     else if (first) {
       let lead = LEADS[seed % LEADS.length](N);
       if (/could try to$/.test(lead) && ['stop', 'try', 'experiment'].includes(head)) lead = LEADS[(seed + 1) % LEADS.length](N);

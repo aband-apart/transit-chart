@@ -28,9 +28,9 @@ const mq = window.matchMedia('(max-width: 760px)');
 const isMobile = () => mq.matches;
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-const EXAMPLE = { id: 'ex1', kind: 'person', name: 'Example chart', date: '1990-07-04', time: '14:30', timeUnknown: false, place: 'New York, United States', lat: 40.7128, lon: -74.006, tz: 'America/New_York' };
+const EXAMPLE = { id: 'ex1', kind: 'person', name: 'Alex', date: '1990-07-04', time: '14:30', timeUnknown: false, place: 'New York, United States', lat: 40.7128, lon: -74.006, tz: 'America/New_York' };
 
-const EXAMPLE2 = { id: 'ex2', kind: 'place', name: 'United States (example)', date: '1776-07-04', time: '17:10', timeUnknown: false, place: 'Philadelphia, United States', lat: 39.9526, lon: -75.1652, tz: 'America/New_York' };
+const EXAMPLE2 = { id: 'ex2', kind: 'place', name: 'United States', date: '1776-07-04', time: '17:10', timeUnknown: false, place: 'Philadelphia, United States', lat: 39.9526, lon: -75.1652, tz: 'America/New_York' };
 
 const state = {
   demo: false,
@@ -84,7 +84,7 @@ function natalOf(profile) {
 }
 
 const nameOf = (p) => p.name || KIND_LABEL[p.kind] || 'Chart';
-const adviceLabels = () => (isSelfVoice() ? { tip: 'Try', avoid: 'Mind' } : { tip: 'Suggestion', avoid: 'Worth watching' });
+const adviceLabels = () => (isSelfVoice() ? { tip: 'Try', avoid: 'Mind' } : { tip: 'Suggestion', avoid: 'Gentle caution' });
 const compareProfile = () => state.profiles.find((p) => p.id === state.compareId && p.id !== state.activeId) || null;
 const isCompareView = () => state.tab === 'compare' && !!compareProfile();
 

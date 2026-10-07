@@ -51,11 +51,17 @@ test('advice becomes suggestions about the subject, with lead-ins that rotate by
   // neighbouring list items never share a lead-in
   const leads = [0, 1, 2, 3].map((i) => advice('Plan something beautiful.', i).split(' ').slice(0, 3).join(' '));
   assert.equal(new Set(leads).size, 4);
-  // "avoid" lines only use lead-ins that read naturally with "avoid", and still rotate
-  const avoidLeads = [0, 1, 2].map((i) => advice('Avoid shortcuts.', i));
-  assert.equal(new Set(avoidLeads.map((x) => x.split(' ').slice(0, 3).join(' '))).size, 3);
-  assert.ok(avoidLeads.every((x) => /to avoid shortcuts\.$/.test(x)));
-  assert.ok(!avoidLeads.some((x) => /could try to avoid|has room to avoid/.test(x)));
+  // "avoid" lines rotate through five phrasings, each of which reads naturally
+  const avoid = [0, 1, 2, 3, 4].map((i) => advice('Avoid shortcuts.', i));
+  assert.equal(new Set(avoid.map((x) => x.split(' ').slice(0, 3).join(' '))).size, 5, JSON.stringify(avoid));
+  assert.deepEqual(avoid, [
+    'Alex may do well to avoid shortcuts.',
+    'Alex might steer clear of shortcuts.',
+    'It could help Alex to avoid shortcuts.',
+    'Alex could hold back from shortcuts.',
+    'A good move for Alex is to avoid shortcuts.',
+  ]);
+  assert.ok(!avoid.some((x) => /could try to avoid|has room to avoid|avoid avoid/i.test(x)));
   setSubject('United States', 'place');
   assert.equal(advice('Say what you actually want and avoid people-pleasing.', 0), 'United States may do well to say what it actually wants and avoid people-pleasing.');
   assert.equal(advice('Share what you have learned. Your history helps others.', 0), 'United States may do well to share what it has learned. Its history helps others.');
@@ -96,5 +102,22 @@ test('the name appears once per sentence; later possessives become their/its', (
   assert.equal(voice('Your Moon is steady. Your Sun is bright.'), "Alex's Moon is steady. Alex's Sun is bright.");
   setSubject('Acme Inc', 'event');
   assert.equal(voice('Your reputation and your public direction.'), "Acme Inc's reputation and its public direction.");
+  reset();
+});
+
+test('every avoid-line reads naturally in every voice and position', () => {
+  const lines = [...Object.values(PLANETS).map((p) => p.avoid)].filter(Boolean);
+  for (const [name, kind] of [['Alex', 'person'], ['Acme Inc', 'event'], ['United States', 'place']]) {
+    setSubject(name, kind);
+    for (const line of lines) {
+      for (let i = 0; i < 5; i++) {
+        const out = advice(line, i);
+        assert.ok(out.startsWith(name) || out.startsWith('It could help') || out.startsWith('A good move for'), `odd lead-in: ${out}`);
+        assert.ok(!/\bavoid avoid\b|\bto to\b|\bof of\b|\bfrom from\b/i.test(out), `doubled word: ${out}`);
+        assert.ok(!/\byou(r|rself)?\b/i.test(out), `second person: ${out}`);
+        assert.ok(/[.!?]$/.test(out), `no end punctuation: ${out}`);
+      }
+    }
+  }
   reset();
 });
