@@ -14,6 +14,8 @@ const VS = '︎';
 const STORE_KEY = 'transit-chart.profiles';
 const LEGACY_KEY = 'transit-chart.profile';
 const KIND_LABEL = { person: 'Person', place: 'Country / place', event: 'Event / org' };
+const mq = window.matchMedia('(max-width: 760px)');
+const isMobile = () => mq.matches;
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 const EXAMPLE = { id: 'ex1', kind: 'person', name: 'Example chart', date: '1990-07-04', time: '14:30', timeUnknown: false, place: 'New York, United States', lat: 40.7128, lon: -74.006, tz: 'America/New_York' };
@@ -30,6 +32,7 @@ const state = {
   now: new Date(),
   when: new Date(),
   tab: 'reading',
+  renderToken: 0,
   selected: null,
   forecastDays: 90,
   filters: { aspect: true, station: true, ingress: true, lunation: true, outer: true, minor: false },
@@ -92,14 +95,22 @@ function current() {
 
 const houseFor = (lon) => houseOf(lon, state.natal.cusps);
 
+const forecastCache = new Map();
+const FORECAST_SPAN = 365;
+
+/** Events from jd to jd+days. The full year is computed once per day/chart and sliced. */
 function getForecast(jd, days) {
-  const key = `${Math.floor(jd)}:${days}:${state.natal.jd}`;
-  state.cache.f ??= {};
-  if (state.cache.f[key]) return state.cache.f[key];
-  let events = [...forecast(state.natal, jd, jd + days), ...outerAspects(state.natal, jd, jd + days)].sort((a, b) => a.jd - b.jd);
-  if (state.natal.timeUnknown) events = events.filter((e) => !(e.type === 'aspect' && ['asc', 'mc'].includes(e.target)));
-  state.cache.f[key] = events;
-  return events;
+  const bucket = Math.floor(jd);
+  const key = `${bucket}:${state.natal._key}`;
+  let all = forecastCache.get(key);
+  if (!all) {
+    all = [...forecast(state.natal, bucket, bucket + FORECAST_SPAN), ...outerAspects(state.natal, bucket, bucket + FORECAST_SPAN)].sort((x, y) => x.jd - y.jd);
+    if (state.natal.timeUnknown) all = all.filter((e) => !(e.type === 'aspect' && ['asc', 'mc'].includes(e.target)));
+    forecastCache.set(key, all);
+    if (forecastCache.size > 6) forecastCache.delete(forecastCache.keys().next().value);
+  }
+  const end = jd + days;
+  return all.filter((e) => e.jd >= jd && e.jd <= end);
 }
 
 /* ---------- views ---------- */
@@ -116,15 +127,25 @@ function renderWheelView() {
   $('.left').classList.toggle('compare', cmp);
   if (cmp) {
     const c = compareData();
-    $('#wheel').innerHTML = renderWheel({ natal: c.A, transit: { points: c.B.points }, aspects: c.aspects, selected: state.selected, outerLabel: c.nameB, innerLabel: c.nameA });
+    $('#wheel').innerHTML = renderWheel({ natal: c.A, transit: { points: c.B.points }, aspects: c.aspects, selected: state.selected, outerLabel: c.nameB, innerLabel: c.nameA, compact: isMobile() });
     $('#legend-outer').textContent = `Outer ring: ${c.nameB}`;
     $('#legend-inner').textContent = `Inner ring: ${c.nameA}`;
     return;
   }
   const { transit, aspects } = current();
-  $('#wheel').innerHTML = renderWheel({ natal: state.natal, transit, aspects, selected: state.selected });
+  $('#wheel').innerHTML = renderWheel({ natal: state.natal, transit, aspects, selected: state.selected, compact: isMobile() });
   $('#legend-outer').textContent = 'Outer ring: transiting planets';
   $('#legend-inner').textContent = `Inner ring: ${possessive()} natal chart`;
+}
+
+function renderWheelDetail() {
+  const el = $('#wheel-detail');
+  if (!isMobile()) { el.innerHTML = ''; return; }
+  const cmp = isCompareView();
+  const list = cmp ? compareData().aspects : current().aspects;
+  const a = list.find((x) => aspectKey(x) === state.selected);
+  if (!a) { el.innerHTML = '<p class="hint">Tap a line on the wheel to read that aspect.</p>'; return; }
+  el.innerHTML = cmp ? synCard(a, compareData()) : aspectCard(a, current().jd);
 }
 
 function aspectKey(a) {
@@ -182,16 +203,18 @@ function eventRow(e) {
   </div>`;
 }
 
+function section(title, body, { open = true, id = '' } = {}) {
+  return `<details class="sec" ${open ? 'open' : ''}${id ? ` id="${id}"` : ''}><summary>${title}</summary><div class="sec-body">${body}</div></details>`;
+}
+
 function readingView() {
   const { jd, transit, aspects } = current();
-  const events = getForecast(jd, 60);
-  const reading = buildReading({ natal: state.natal, transit, aspects, events });
+  const mobile = isMobile();
+  const reading = buildReading({ natal: state.natal, transit, aspects, events: [] });
   const sky = skyToday(state.natal, transit);
-  const top = aspects.slice(0, 5);
-  const upcoming = reading.upcoming.filter((e) => e.type !== 'ingress' || SLOW.includes(e.transit) || e.transit === 'mars').slice(0, 10);
-  const OUT = ['jupiter', 'saturn', 'uranus', 'neptune', 'pluto'];
-  const worldCal = getForecast(jd, 365).filter((e) => e.type === 'outer' || (e.type === 'lunation' && e.eclipse) || (e.type === 'ingress' && OUT.includes(e.transit)) || (e.type === 'station' && OUT.includes(e.transit))).slice(0, 12);
+  const top = aspects.slice(0, mobile ? 3 : 5);
   const when = state.when.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const slots = '<p class="skeleton">Calculating…</p>';
 
   return `
     ${state.natal.timeUnknown ? `<div class="banner">${esc(voice('Birth time unknown: houses are calculated from your Sun sign and angles (Asc/MC) are left out.'))}</div>` : ''}
@@ -207,27 +230,43 @@ function readingView() {
       </div>
     </section>
 
-    <h3 class="section-title">${esc(voice("What's touching your chart"))}</h3>
-    ${top.length ? top.map((a) => aspectCard(a, jd)).join('') : `<p class="muted">${esc(voice('No tight transits to your natal chart right now, a quiet window.'))}</p>`}
+    ${section(esc(voice("What's touching your chart")), top.length ? top.map((a) => aspectCard(a, jd, { withExact: false })).join('') + (aspects.length > top.length ? `<p class="muted small">More in the Active transits tab.</p>` : '') : `<p class="muted">${esc(voice('No tight transits to your natal chart right now, a quiet window.'))}</p>`)}
 
-    <h3 class="section-title">Do and mind</h3>
-    <div class="two">
+    ${section('Do and mind', `<div class="two">
       <div class="card"><div class="eyebrow">Lean into</div><ul class="plain">${reading.tips.do.map((t) => `<li>${esc(t.text)}<span class="src">${esc(t.source)}</span></li>`).join('')}</ul></div>
       <div class="card"><div class="eyebrow">Watch out for</div><ul class="plain">${reading.tips.avoid.length ? reading.tips.avoid.map((t) => `<li>${esc(t.text)}<span class="src">${esc(t.source)}</span></li>`).join('') : '<li class="muted">Nothing pressing, and this is a good window to move forward.</li>'}</ul></div>
-    </div>
+    </div>`)}
 
-    <h3 class="section-title">${esc(voice('The long game: slow planets in your houses'))}</h3>
-    ${reading.seasons.map((s) => `<div class="card"><h3>${esc(s.title)} · ${ordinal(s.house)} house</h3><p style="margin:0">${esc(s.text)}</p>${s.world ? `<p class="muted" style="margin:8px 0 0"><b>In the world:</b> ${esc(s.world)}</p>` : ''}</div>`).join('')}
+    ${section(esc(voice('The long game: slow planets in your houses')), reading.seasons.map((s) => `<div class="card"><h3>${esc(s.title)} · ${ordinal(s.house)} house</h3><p style="margin:0">${esc(s.text)}</p>${s.world ? `<p class="muted" style="margin:8px 0 0"><b>In the world:</b> ${esc(s.world)}</p>` : ''}</div>`).join(''), { open: !mobile })}
 
-    <h3 class="section-title">The world calendar: next 12 months</h3>
-    <div class="card">${worldCal.length ? worldCal.map(eventRow).join('') : '<p class="muted">No major collective turning points ahead.</p>'}
-    <p class="muted small" style="margin:12px 0 0">Collective themes are interpretive, a way to read the mood of an era rather than forecast specific headlines.</p></div>
+    ${section('The world calendar: next 12 months', `<div class="card" id="slot-world">${slots}</div>`, { open: !mobile })}
 
-    <h3 class="section-title">What's coming in the next 60 days</h3>
-    <div class="card">${upcoming.length ? upcoming.map(eventRow).join('') : '<p class="muted">Nothing major on the calendar.</p>'}
-    <p class="muted small" style="margin:12px 0 0">See the Forecast tab for the full calendar.</p></div>
+    ${section("What's coming in the next 60 days", `<div class="card" id="slot-upcoming">${slots}</div>`, { open: !mobile })}
 
     <p class="disclaimer">Astrology offers a framework for reflection. Read these as tendencies and timing, not fixed outcomes. For health, money or legal decisions, rely on qualified professionals.</p>`;
+}
+
+/** Fills the heavier, date-range sections after the first paint so the view appears instantly. */
+function fillReadingLater(token) {
+  setTimeout(() => {
+    if (token !== state.renderToken || state.tab !== 'reading') return;
+    const { jd, transit, aspects } = current();
+    const events = getForecast(jd, 60);
+    const reading = buildReading({ natal: state.natal, transit, aspects, events });
+    const upcoming = reading.upcoming.filter((e) => e.type !== 'ingress' || SLOW.includes(e.transit) || e.transit === 'mars').slice(0, 10);
+    const OUT = ['jupiter', 'saturn', 'uranus', 'neptune', 'pluto'];
+    const worldCal = getForecast(jd, 365).filter((e) => e.type === 'outer' || (e.type === 'lunation' && e.eclipse) || (e.type === 'ingress' && OUT.includes(e.transit)) || (e.type === 'station' && OUT.includes(e.transit))).slice(0, 12);
+    const w = $('#slot-world');
+    const u = $('#slot-upcoming');
+    // exact dates for the top transit cards (computed after first paint)
+    for (const a of aspects.slice(0, isMobile() ? 3 : 5)) {
+      const chips = document.querySelector(`#panel .tcard[data-asp="${aspectKey(a)}"] .chips`);
+      const text = chips && !chips.querySelector('.exact') ? exactText(a, jd) : '';
+      if (text) chips.insertAdjacentHTML('beforeend', `<span class="chip hot exact">${esc(text)}</span>`);
+    }
+    if (w) w.innerHTML = `${worldCal.length ? worldCal.map(eventRow).join('') : '<p class="muted">No major collective turning points ahead.</p>'}<p class="muted small" style="margin:12px 0 0">Collective themes are interpretive, a way to read the mood of an era rather than forecast specific headlines.</p>`;
+    if (u) u.innerHTML = `${upcoming.length ? upcoming.map(eventRow).join('') : '<p class="muted">Nothing major on the calendar.</p>'}<p class="muted small" style="margin:12px 0 0">See the Forecast tab for the full calendar.</p>`;
+  }, 30);
 }
 
 function transitsView() {
@@ -240,14 +279,14 @@ function transitsView() {
       <td class="t-${a.tone}"><span class="g">${a.glyph}${VS}</span>${esc(a.aspect)}</td>
       <td>${g(a.target)}${esc(natalLabel(a.target).replace('natal ', ''))}</td>
       <td>${a.orb.toFixed(2)}°</td>
-      <td>${a.applying ? 'applying' : 'separating'}</td>
-      <td><div class="bar"><i style="width:${Math.max(6, (a.strength / max) * 100)}%"></i></div></td>
+      <td class="m-hide">${a.applying ? 'applying' : 'separating'}</td>
+      <td class="m-hide"><div class="bar"><i style="width:${Math.max(6, (a.strength / max) * 100)}%"></i></div></td>
     </tr>`;
   }).join('');
   return `
     ${sel ? aspectCard(sel, jd) : '<p class="muted">Select a line on the wheel or a row below to read it in detail.</p>'}
     <div class="card"><table>
-      <thead><tr><th>Transiting</th><th>Aspect</th><th>Natal</th><th>Orb</th><th>Phase</th><th>Weight</th></tr></thead>
+      <thead><tr><th>Transiting</th><th>Aspect</th><th>Natal</th><th>Orb</th><th class="m-hide">Phase</th><th class="m-hide">Weight</th></tr></thead>
       <tbody>${rows || '<tr><td colspan="6" class="muted">No active aspects.</td></tr>'}</tbody>
     </table></div>`;
 }
@@ -291,10 +330,8 @@ function natalView() {
     <div class="card"><div class="eyebrow">Modalities</div><div class="elbars">${bar(port.modalities)}</div></div></div>
     <h3 class="section-title">${esc(voice('Your placements'))}</h3>
     ${keys.map((k) => { const p = n.points[k]; const h = HOUSES[p.house - 1]; return `<div class="card place"><h3>${g(k)}${esc(PLANETS[k].name)} in ${esc(SIGNS[p.sign].name)}${p.retro && !['node', 'southnode'].includes(k) ? ' ℞' : ''} · ${ordinal(p.house)} house</h3><p class="muted" style="margin:2px 0 0">${esc(voice(`${PLACEMENT_LINE[k]}, expressed through ${h.theme}.`))}</p></div>`; }).join('')}
-    <h3 class="section-title">Positions</h3>
-    <div class="card"><table><thead><tr><th>Body</th><th>Sign</th><th>Position</th><th>House</th></tr></thead><tbody>${rows}</tbody></table></div>
-    ${n.timeUnknown ? '' : `<h3 class="section-title">House cusps (${HOUSE_SYSTEMS[n.houseSystem] ?? 'Placidus'})</h3>
-    <div class="card"><table><thead><tr><th>House</th><th>Theme</th><th>Cusp</th></tr></thead><tbody>${HOUSES.map((h, i) => `<tr><td>${h.n}</td><td>${esc(h.label)}</td><td>${formatPos(n.cusps[i])}</td></tr>`).join('')}</tbody></table></div>`}`;
+    <details class="sec" ${isMobile() ? '' : 'open'}><summary>Positions</summary><div class="sec-body"><div class="card"><table><thead><tr><th>Body</th><th>Sign</th><th>Position</th><th>House</th></tr></thead><tbody>${rows}</tbody></table></div></div></details>
+    ${n.timeUnknown ? '' : `<details class="sec" ${isMobile() ? '' : 'open'}><summary>House cusps (${HOUSE_SYSTEMS[n.houseSystem] ?? 'Placidus'})</summary><div class="sec-body"><div class="card"><table><thead><tr><th>House</th><th>Theme</th><th>Cusp</th></tr></thead><tbody>${HOUSES.map((h, i) => `<tr><td>${h.n}</td><td>${esc(h.label)}</td><td>${formatPos(n.cusps[i])}</td></tr>`).join('')}</tbody></table></div></div></details>`}`;
 }
 
 function synCard(a, c) {
@@ -346,8 +383,16 @@ function compareView() {
 
 function renderPanel() {
   if (state.tab === 'compare' && !compareProfile()) state.tab = 'reading';
-  const view = { reading: readingView, transits: transitsView, forecast: forecastView, natal: natalView, compare: compareView }[state.tab];
-  $('#panel').innerHTML = view();
+  if (state.tab === 'wheel' && !isMobile()) state.tab = 'reading';
+  document.body.dataset.tab = state.tab;
+  const token = ++state.renderToken;
+  if (state.tab === 'wheel') {
+    $('#panel').innerHTML = '';
+  } else {
+    const view = { reading: readingView, transits: transitsView, forecast: forecastView, natal: natalView, compare: compareView }[state.tab];
+    $('#panel').innerHTML = view();
+    if (state.tab === 'reading') fillReadingLater(token);
+  }
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === state.tab));
 }
 
@@ -362,6 +407,7 @@ function renderAll({ keepScroll = true } = {}) {
   const y = window.scrollY;
   renderWheelView();
   renderPanel();
+  renderWheelDetail();
   renderTimebar();
   if (keepScroll) window.scrollTo(0, y);
 }
@@ -374,8 +420,9 @@ function setWhen(d) {
 }
 
 function select(key, { switchTab = false } = {}) {
-  state.selected = state.selected === key && !switchTab ? null : key;
-  if (switchTab && !isCompareView()) state.tab = 'transits';
+  const toggle = !switchTab || isMobile() || isCompareView();
+  state.selected = state.selected === key && toggle ? null : key;
+  if (switchTab && !isCompareView() && !isMobile()) state.tab = 'transits';
   renderAll();
 }
 
@@ -384,11 +431,11 @@ document.addEventListener('click', (e) => {
   if (t) {
     const inWheel = !!t.closest('#wheel');
     select(t.dataset.asp, { switchTab: inWheel });
-    if (inWheel && !isCompareView()) $('.right').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (inWheel && !isCompareView() && !isMobile()) $('.right').scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
   const tab = e.target.closest('.tab');
-  if (tab) { state.tab = tab.dataset.tab; state.selected = null; renderAll(); return; }
+  if (tab) { state.tab = tab.dataset.tab; state.selected = null; renderAll({ keepScroll: false }); if (isMobile()) window.scrollTo(0, 0); return; }
   const f = e.target.closest('[data-filter]');
   if (f) { state.filters[f.dataset.filter] = !state.filters[f.dataset.filter]; renderPanel(); return; }
   const sh = e.target.closest('[data-shift]');
@@ -399,7 +446,15 @@ document.addEventListener('change', (e) => {
   if (e.target.id === 'fdays') { state.forecastDays = +e.target.value; renderPanel(); }
   if (e.target.id === 'when' && e.target.value) setWhen(new Date(e.target.value));
 });
-$('#scrub').addEventListener('input', (e) => setWhen(new Date(state.now.getTime() + +e.target.value * 86400000)));
+let scrubTimer = null;
+$('#scrub').addEventListener('input', (e) => {
+  state.when = new Date(state.now.getTime() + +e.target.value * 86400000);
+  state.selected = null;
+  renderWheelView();
+  renderTimebar({ fromScrub: true });
+  clearTimeout(scrubTimer);
+  scrubTimer = setTimeout(() => { renderPanel(); renderWheelDetail(); }, 220);
+});
 $('#now').addEventListener('click', () => { state.now = new Date(); setWhen(new Date()); });
 
 /* ---------- birth form ---------- */
@@ -531,6 +586,8 @@ $('#compare-select').addEventListener('change', (e) => {
   renderAll();
 });
 
+mq.addEventListener('change', () => { if (state.profile) renderAll({ keepScroll: false }); });
+
 /* ---------- boot ---------- */
 async function boot() {
   const tzs = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
@@ -544,7 +601,8 @@ async function boot() {
   $('#loading').hidden = true;
 
   const params = new URLSearchParams(location.search);
-  if (params.get('tab')) state.tab = params.get('tab');
+  state.tab = params.get('tab') || (isMobile() ? 'wheel' : 'reading');
+  if (isMobile()) state.forecastDays = 30;
   if (params.get('demo')) {
     state.demo = true;
     state.profiles = params.get('demo') === '2' ? [EXAMPLE, EXAMPLE2] : [EXAMPLE];
@@ -568,3 +626,7 @@ async function boot() {
   if (params.get('date') && state.profile) setWhen(new Date(params.get('date')));
 }
 boot();
+
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => { /* offline cache is optional */ }));
+}

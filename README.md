@@ -13,7 +13,7 @@ npm install
 npm start        # build, serve and open the browser
 npm run dev      # http://localhost:5173
 npm test         # ephemeris, time-zone, aspect and forecast checks
-npm run build    # static site in dist/
+npm run build    # static site in dist/ (also emits sw.js for the offline cache)
 ```
 
 Add `?demo=1` to the URL to load an example chart, or `?demo=2&tab=compare` for two example charts side by side.
@@ -29,6 +29,12 @@ Add `?demo=1` to the URL to load an example chart, or `?demo=2&tab=compare` for 
 - **Multiple charts and Compare**: save people, countries/places and events/organizations, switch between them (transits to a country's chart work the same way), and pick "Compare with" for a two-chart wheel, cross-aspects, themes and house overlays. Slow outer-planet pairs are skipped because whole generations share them.
 
 Unknown birth time is supported: houses fall back to Sun-sign whole houses and Asc/MC are omitted.
+
+## On your phone
+
+The page has a dedicated phone layout: a bottom tab bar (Chart, Reading, Transits, Forecast, Natal, Compare), a wheel with larger glyphs and tap-friendly lines (tap a line to read it under the wheel), collapsible sections, and a bottom-sheet form with touch-sized inputs.
+
+Open the published site, then **Add to Home Screen** (iPhone: Share → Add to Home Screen; Android: menu → Install app). It opens full screen with its own icon, and after the first visit the app and ephemeris are cached so it opens quickly and works offline (place lookup still needs a connection). Your charts are stored only in that phone's browser and don't sync with your computer.
 
 ## Editing the astrologer's voice
 

@@ -53,10 +53,10 @@ function declutter(items, minSep) {
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-export function renderWheel({ natal, transit, aspects, selected, outerLabel = 'Transiting', innerLabel = 'Natal' }) {
+export function renderWheel({ natal, transit, aspects, selected, outerLabel = 'Transiting', innerLabel = 'Natal', compact = false }) {
   // Whole Sign charts start the 1st house at 9 o'clock (the Ascendant is drawn inside it); otherwise the Ascendant sits there.
   const asc = natal.houseSystem === 'W' ? natal.cusps[0] : natal.asc;
-  let svg = `<svg viewBox="-28 -28 816 816" class="wheel" role="img" aria-label="Natal chart with transiting planets">`;
+  let svg = `<svg viewBox="-28 -28 816 816" class="wheel${compact ? ' compact' : ''}" role="img" aria-label="Natal chart with transiting planets">`;
   svg += `<defs>
     <radialGradient id="bg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="var(--wheel-core)"/><stop offset="100%" stop-color="var(--wheel-edge)"/></radialGradient>
   </defs>`;
@@ -123,12 +123,13 @@ export function renderWheel({ natal, transit, aspects, selected, outerLabel = 'T
     const tight = a.orb < 1;
     const sel = selected === `${a.transit}-${a.aspect}-${a.target}`;
     const cls = `asp asp-${a.tone}${sel ? ' sel' : ''}${selected && !sel ? ' dim' : ''}`;
+    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="asp-hit" data-asp="${a.transit}-${a.aspect}-${a.target}"/>`;
     svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="${cls}" stroke-width="${tight ? 2.4 : 1.4}" data-asp="${a.transit}-${a.aspect}-${a.target}" style="opacity:${sel ? 1 : Math.min(0.95, 0.35 + a.strength / 400)}"><title>${esc(PLANETS[a.transit].name)} ${a.aspect} ${esc(PLANETS[a.target].name)} (orb ${a.orb.toFixed(1)}°)</title></line>`;
   });
 
   // natal planets (inner band)
   const natalItems = NATAL_SHOWN.filter((k) => natal.points[k]).map((k) => ({ key: k, lon: natal.points[k].lon }));
-  for (const it of declutter(natalItems, 7.5)) {
+  for (const it of declutter(natalItems, compact ? 11 : 7.5)) {
     const p = natal.points[it.key];
     const [tx, ty] = pt(it.lon, R.zodiacInner, asc);
     const [tx2, ty2] = pt(it.lon, R.zodiacInner - 7, asc);
@@ -141,7 +142,7 @@ export function renderWheel({ natal, transit, aspects, selected, outerLabel = 'T
 
   // transit planets (outer band)
   const trItems = TRANSIT_SHOWN.filter((k) => transit.points[k]).map((k) => ({ key: k, lon: transit.points[k].lon }));
-  for (const it of declutter(trItems, 7)) {
+  for (const it of declutter(trItems, compact ? 10.5 : 7)) {
     const p = transit.points[it.key];
     const [tx, ty] = pt(it.lon, R.zodiacOuter, asc);
     const [tx2, ty2] = pt(it.lon, R.zodiacOuter + 7, asc);

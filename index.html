@@ -2,7 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0a1c" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Transit Chart" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <title>Transit Chart</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23e6c36a' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23e6c36a'/%3E%3C/svg%3E" />
   </head>
@@ -31,6 +39,7 @@
             <span><i class="line flow"></i>Flowing</span>
             <span><i class="line intense"></i>Conjunction</span>
           </div>
+          <div id="wheel-detail" class="wheel-detail"></div>
           <div class="timebar">
             <div class="timebar-row">
               <button class="btn small" data-shift="-7">−1w</button>
@@ -47,11 +56,12 @@
 
         <section class="right">
           <nav class="tabs" role="tablist">
-            <button role="tab" data-tab="reading" class="tab active">Reading</button>
-            <button role="tab" data-tab="transits" class="tab">Active transits</button>
-            <button role="tab" data-tab="forecast" class="tab">Forecast</button>
-            <button role="tab" data-tab="natal" class="tab">Natal chart</button>
-            <button role="tab" data-tab="compare" class="tab" id="compare-tab" hidden>Compare</button>
+            <button role="tab" data-tab="wheel" class="tab mobile-only"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg><span class="lbl-long">Chart</span><span class="lbl-short">Chart</span></button>
+            <button role="tab" data-tab="reading" class="tab active"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7"/></svg><span class="lbl-long">Reading</span><span class="lbl-short">Reading</span></button>
+            <button role="tab" data-tab="transits" class="tab"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(-30 12 12)"/></svg><span class="lbl-long">Active transits</span><span class="lbl-short">Transits</span></button>
+            <button role="tab" data-tab="forecast" class="tab"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span class="lbl-long">Forecast</span><span class="lbl-short">Forecast</span></button>
+            <button role="tab" data-tab="natal" class="tab"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span class="lbl-long">Natal chart</span><span class="lbl-short">Natal</span></button>
+            <button role="tab" data-tab="compare" class="tab" id="compare-tab" hidden><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg><span class="lbl-long">Compare</span><span class="lbl-short">Compare</span></button>
           </nav>
           <div id="panel" class="panel"></div>
         </section>
