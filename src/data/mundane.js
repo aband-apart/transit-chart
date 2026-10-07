@@ -18,20 +18,22 @@ export const SIGN_WORLD = [
 ];
 
 // How each slow planet works on the collective, and the domain it rules in world affairs.
+// `verb` slots in front of a sign's domain: "<verb> housing, family, nationhood and care."
 export const PLANET_WORLD = {
-  jupiter: { verb: 'Growth, optimism and expansion are concentrated in', domain: 'growth, law, belief and economic confidence' },
-  saturn: { verb: 'Structure, rules and accountability are tightening around', domain: 'government, regulation and economic limits' },
-  uranus: { verb: 'Disruption and innovation are reshaping', domain: 'technology, revolt and sudden change' },
-  neptune: { verb: 'Ideals, illusions and dissolving certainties are playing out in', domain: 'ideals, media narratives and public trust' },
-  pluto: { verb: 'A deep, long-running transformation of power is working through', domain: 'power, wealth and deep restructuring' },
+  jupiter: { verb: 'Growth and optimism tend to gather around', domain: 'growth, law, belief and economic confidence' },
+  saturn: { verb: 'Structure, rules and accountability tend to tighten around', domain: 'government, regulation and economic limits' },
+  uranus: { verb: 'Disruption and innovation tend to reshape', domain: 'technology, revolt and sudden change' },
+  neptune: { verb: 'Ideals and shifting certainties tend to play out in', domain: 'ideals, media narratives and public trust' },
+  pluto: { verb: 'A deep, long-running shift in power tends to work through', domain: 'power, wealth and deep restructuring' },
 };
 
 // Hand-written readings for the placements that define the current era (planet:signIndex).
+// These are interpretations of collective themes, not predictions of particular events.
 export const WORLD_OVERRIDE = {
-  'pluto:10': 'Pluto in Aquarius is the long restructuring of technology, data and networks, and of who holds collective power. Expect recurring fights over AI, surveillance, platforms and institutional legitimacy.',
-  'neptune:0': 'Neptune in Aries is dissolving old ideas of strength, leadership and identity. New ideals take shape alongside confusion, myth-making and uncertainty around conflict.',
-  'saturn:0': 'Saturn in Aries tests independence and leadership. Old structures around authority, defence and who is in charge are being rebuilt from the ground up.',
-  'uranus:2': 'Uranus in Gemini is rewiring how information moves. Expect rapid change in media, AI, communication and education, with truth and attention as the battlegrounds.',
-  'jupiter:3': 'Jupiter in Cancer brings growth and generosity to housing, family, food and care, and to ideas of home and belonging.',
-  'jupiter:4': 'Jupiter in Leo expands appetite for culture, entertainment, bold leadership and celebration, with the risk of ego and overreach.',
+  'pluto:10': 'Pluto in Aquarius is often read as a long restructuring of technology, data and networks, and of who holds collective power. Debates over AI, surveillance, platforms and institutional legitimacy may keep resurfacing.',
+  'neptune:0': 'Neptune in Aries tends to dissolve old ideas of strength, leadership and identity. New ideals can take shape alongside confusion, myth-making and uncertainty around conflict.',
+  'saturn:0': 'Saturn in Aries tends to test independence and leadership. Old structures around authority, defence and who is in charge can be rebuilt from the ground up.',
+  'uranus:2': 'Uranus in Gemini is often read as a rewiring of how information moves. Change in media, AI, communication and education is likely, with truth and attention as recurring battlegrounds.',
+  'jupiter:3': 'Jupiter in Cancer tends to bring growth and generosity to housing, family, food and care, and to ideas of home and belonging.',
+  'jupiter:4': 'Jupiter in Leo can expand the appetite for culture, entertainment, bold leadership and celebration, with ego and overreach as the risk.',
 };

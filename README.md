@@ -57,6 +57,10 @@ The page has a dedicated phone layout: a bottom tab bar (Chart, Reading, Transit
 
 Open the published site, then **Add to Home Screen** (iPhone: Share → Add to Home Screen; Android: menu → Install app). It opens full screen with its own icon, and after the first visit the app and ephemeris are cached so it opens quickly and works offline (place lookup still needs a connection). Your charts are stored only in that phone's browser and don't sync with your computer.
 
+## Voice
+
+Everything the app says follows [`docs/voice-guide.md`](docs/voice-guide.md): warm, concrete, honest about uncertainty, tendencies and invitations rather than promises, with plain facts left plain. `tests/voice-quality.test.js` generates complete readings for all four chart types across several skies and checks them for unsupported certainty, unhedged outcome claims, stacked hedges, hedge density and repetition (`src/lib/voice-lint.js`). The checks are a safety net, so read the output as well: the guide has a review checklist.
+
 ## Editing the astrologer's voice
 
 All interpretive text lives in [`src/data/astro-data.js`](src/data/astro-data.js) and is composed by [`src/astro/interpret.js`](src/astro/interpret.js). Orbs and ranking weights are in [`src/astro/aspects.js`](src/astro/aspects.js).

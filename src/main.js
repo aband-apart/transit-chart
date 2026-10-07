@@ -293,8 +293,8 @@ function section(title, body, { open = true, id = '', count = '' } = {}) {
 const CLIMATE_LABEL = { demanding: 'Demanding', mixed: 'Mixed', supportive: 'Supportive' };
 
 /** One expandable transit: headline always visible, the full reading on demand. */
-function txItem(a, { open = false } = {}) {
-  const d = describeAspect(a, state.natal);
+function txItem(a, { open = false, rank, brief = false } = {}) {
+  const d = describeAspect(a, state.natal, brief ? undefined : rank);
   const key = aspectKey(a);
   const labels = adviceLabels();
   return `<details class="tx ${a.tone}" data-key="${key}" ${open ? 'open' : ''}>
@@ -312,12 +312,23 @@ function txItem(a, { open = false } = {}) {
         <span class="chip">${esc(d.timing)}</span>
         ${a.retro ? '<span class="chip">retrograde</span>' : ''}
       </div>
-      <p class="muted small">${esc(d.pace)}</p>
+      ${brief ? '' : `<p class="muted small">${esc(d.pace)}</p>
       <div class="tipline"><b>${labels.tip}:</b> ${esc(d.tip)}</div>
-      ${d.avoid ? `<div class="tipline avoid"><b>${labels.avoid}:</b> ${esc(d.avoid)}</div>` : ''}
+      ${d.avoid ? `<div class="tipline avoid"><b>${labels.avoid}:</b> ${esc(d.avoid)}</div>` : ''}`}
       <p style="margin:12px 0 0"><button type="button" class="btn small" data-showchart="${key}">Show on chart</button></p>
     </div>
   </details>`;
+}
+
+/** Transit rows for the Reading. Advice and pace show once per planet, so three Neptune rows don't repeat themselves. */
+function txList(top) {
+  const seen = new Set();
+  let shown = 0;
+  return top.map((a, i) => {
+    const brief = seen.has(a.transit);
+    seen.add(a.transit);
+    return txItem(a, { open: i === 0, rank: brief ? undefined : shown++, brief });
+  });
 }
 
 function readingView() {
@@ -351,7 +362,7 @@ function readingView() {
       <p class="lead-text">${esc(reading.climateText)} ${esc(reading.focusText)}</p>
     </section>
 
-    ${section(esc(voice('Most important transits')), top.length ? top.map((a, i) => txItem(a, { open: i === 0 })).join('') + (aspects.length > top.length ? `<p class="muted small">${aspects.length - top.length} more in the Active transits tab.</p>` : '') : `<p class="muted">${esc(voice('No tight transits to your natal chart right now, a quiet window.'))}</p>`, { count: top.length ? `${aspects.length} active` : '' })}
+    ${section(esc(voice('Most important transits')), top.length ? txList(top).join('') + (aspects.length > top.length ? `<p class="muted small">${aspects.length - top.length} more in the Active transits tab.</p>` : '') : `<p class="muted">${esc(voice('No tight transits to your natal chart right now, a quiet window.'))}</p>`, { count: top.length ? `${aspects.length} active` : '' })}
 
     ${section('Do and mind', `<div class="two">
       <div class="card"><div class="eyebrow">Lean into</div><ul class="plain">${reading.tips.do.map((t) => `<li>${esc(t.text)}<span class="src">${esc(t.source)}</span></li>`).join('')}</ul></div>
@@ -499,8 +510,8 @@ function natalView() {
     ${n.timeUnknown ? '' : `<details class="sec" ${isMobile() ? '' : 'open'}><summary>House cusps (${HOUSE_SYSTEMS[n.houseSystem] ?? 'Placidus'})</summary><div class="sec-body"><div class="card"><table><thead><tr><th>House</th><th>Theme</th><th>Cusp</th></tr></thead><tbody>${HOUSES.map((h0, i) => { const h = houseInfo(h0.n); return `<tr><td>${h.n}</td><td>${esc(h.label)}</td><td>${formatPos(n.cusps[i])}</td></tr>`; }).join('')}</tbody></table></div></div></details>`}`;
 }
 
-function synCard(a, c) {
-  const d = describeSynastry(a, c.nameA, c.nameB, c.pa.kind, c.pb.kind);
+function synCard(a, c, rank) {
+  const d = describeSynastry(a, c.nameA, c.nameB, c.pa.kind, c.pb.kind, rank);
   const sel = selectedAspect() === aspectKey(a);
   return `<article class="card tcard ${a.tone}${sel ? ' selected' : ''}" data-asp="${aspectKey(a)}">
     <header><span class="glyphs">${PLANETS[a.transit].glyph}${VS} ${a.glyph}${VS} ${PLANETS[a.target].glyph}${VS}</span><h3>${esc(d.title)}</h3></header>
@@ -539,7 +550,7 @@ function compareView() {
       <div class="card"><div class="eyebrow">Where it rubs</div><ul class="plain">${sum.frictions.length ? sum.frictions.map(li).join('') : '<li class="muted">No major friction.</li>'}</ul></div>
     </div>
     <h3 class="section-title">Strongest links</h3>
-    ${top.length ? top.map((a) => synCard(a, c)).join('') : '<p class="muted">No tight aspects between these charts.</p>'}
+    ${top.length ? top.map((a, i) => synCard(a, c, i)).join('') : '<p class="muted">No tight aspects between these charts.</p>'}
     <h3 class="section-title">House overlays</h3>
     ${overlayTable(`${c.nameB} in ${c.nameA}'s chart`, c.B, c.A, c.nameB, c.nameA)}
     ${overlayTable(`${c.nameA} in ${c.nameB}'s chart`, c.A, c.B, c.nameA, c.nameB)}
