@@ -581,3 +581,20 @@ details.sec > summary .count { white-space: nowrap; flex: none; }
 details.sec > summary { flex-wrap: nowrap; }
 @media (max-width: 760px) { .fchips .chip { min-height: 44px; } }
 @media (max-width: 760px) { .psum > summary, details.sec > summary, .timeadjust > summary { min-height: 44px; } }
+
+/* several exact dates: a compact label, with the dates in a list beneath it */
+.chip { max-width: 100%; }
+details.passes { margin: 8px 0 2px; }
+details.passes > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; min-height: 36px; }
+details.passes > summary::-webkit-details-marker { display: none; }
+details.passes > summary::after { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--gold-dim); border-bottom: 2px solid var(--gold-dim); transform: rotate(45deg); transition: transform .15s; margin-top: -2px; }
+details.passes[open] > summary::after { transform: rotate(-135deg); margin-top: 3px; }
+details.passes > p { margin: 8px 0 6px; }
+.pass-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.pass-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; font-size: 14px; border-bottom: 1px solid #23234a; }
+.pass-list li:last-child { border-bottom: none; }
+.pass-list li.past { color: var(--muted); }
+.pass-list li.next { background: #e6c36a14; box-shadow: inset 3px 0 var(--gold); }
+.pass-list .tag { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.pass-list li.next .tag { color: var(--gold); font-weight: 600; }
+@media (max-width: 760px) { details.passes > summary { min-height: 44px; } }

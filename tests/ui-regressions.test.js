@@ -53,3 +53,16 @@ test('the demo still announces that it is an unsaved example', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(html, /Exploring an example chart\. Nothing is saved\./);
 });
+
+test('exact dates: several passes use a compact label with a list, not one long chip', () => {
+  assert.match(main, /import \{ describePasses \} from '\.\/lib\/passes\.js'/);
+  // the old behaviour built "Exact on <date>, <date>, ..." with join() and put it in a chip
+  assert.doesNotMatch(main, /Exact on \$\{parts\.join/);
+  assert.doesNotMatch(main, /function exactText/);
+  // multi-pass output is a <details> whose summary is the short label, with the dates in a list
+  assert.match(main, /<details class="passes exact"><summary class="chip hot">\$\{esc\(info\.label\)\}<\/summary>/);
+  assert.match(main, /<ul class="pass-list">/);
+  // and the styles for it exist
+  assert.ok(rulesFor('.pass-list').length > 0, '.pass-list styles');
+  assert.ok(rulesFor('details.passes > summary').some((b) => /inline-flex/.test(b)), 'the summary is styled like a chip');
+});

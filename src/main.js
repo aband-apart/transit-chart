@@ -10,6 +10,7 @@ import { PLANETS, SIGNS, HOUSES, PLACEMENT_LINE } from './data/astro-data.js';
 import { renderWheel } from './ui/wheel.js';
 import { aspectKey, aspectsFor, sameSelection } from './ui/selection.js';
 import { eventKind, firstSentence, groupEvents, activeFilterCount } from './lib/timeline.js';
+import { describePasses } from './lib/passes.js';
 import { validateStep, firstInvalidStep, STEP_TITLES } from './lib/form-steps.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -235,17 +236,24 @@ function renderWheelDetail() {
   el.innerHTML = `${card || '<p class="hint">Tap a planet or a line on the wheel, or pick an aspect below.</p>'}${aspectList(list, selectedAspect(), cmp)}`;
 }
 
-function exactText(a, jd) {
-  const passes = aspectPasses(a, jd);
-  if (!passes.all.length) return '';
-  const parts = passes.all.map((j) => `${fmtDateLong(j)}${j < jd ? ' (past)' : ''}`);
-  return passes.all.length > 1 ? `Exact on ${parts.join(', ')}: ${passes.all.length} passes` : `Exact on ${parts[0]}`;
+/** Exact dates for a transit: a short chip for one date, or a compact label with a date list for several. */
+function exactParts(a, jd) {
+  const info = describePasses(aspectPasses(a, jd).all, jd, fmtDateLong);
+  if (info.kind === 'none') return { chip: '', block: '' };
+  if (info.kind === 'single') return { chip: `<span class="chip hot exact">${esc(info.chip)}</span>`, block: '' };
+  const items = info.items.map((i) => `<li class="${i.past ? 'past' : ''}${i.next ? ' next' : ''}"><span>${esc(i.text)}</span><span class="tag">${i.past ? 'past' : i.next ? 'next' : 'ahead'}</span></li>`).join('');
+  return {
+    chip: '',
+    block: `<details class="passes exact"><summary class="chip hot">${esc(info.label)}</summary>
+      <p class="muted small">Retrograde loops bring the same degree exact more than once. ${info.ahead ? `${info.ahead} still ahead.` : 'All have passed.'}</p>
+      <ul class="pass-list">${items}</ul></details>`,
+  };
 }
 
 function aspectCard(a, jd, { withExact = true } = {}) {
   const d = describeAspect(a, state.natal);
   const sel = selectedAspect() === aspectKey(a);
-  const exact = withExact ? exactText(a, jd) : '';
+  const exact = withExact ? exactParts(a, jd) : { chip: '', block: '' };
   return `<article class="card tcard ${a.tone}${sel ? ' selected' : ''}" data-asp="${aspectKey(a)}">
     <header>
       <span class="glyphs">${PLANETS[a.transit].glyph}${VS} ${a.glyph}${VS} ${PLANETS[a.target].glyph}${VS}</span>
@@ -257,8 +265,9 @@ function aspectCard(a, jd, { withExact = true } = {}) {
       <span class="chip ${a.orb < 1 ? 'hot' : ''}">orb ${a.orb.toFixed(1)}°${a.orb < 1 ? ' · tight' : ''}</span>
       <span class="chip">${esc(d.timing)}</span>
       ${a.retro ? '<span class="chip">retrograde</span>' : ''}
-      ${exact ? `<span class="chip hot">${esc(exact)}</span>` : ''}
+      ${exact.chip}
     </div>
+    ${exact.block}
     <p class="muted small" style="margin-top:8px">${esc(d.pace)}</p>
     <div class="tipline"><b>${adviceLabels().tip}:</b> ${esc(d.tip)}</div>
     ${d.avoid ? `<div class="tipline avoid"><b>${adviceLabels().avoid}:</b> ${esc(d.avoid)}</div>` : ''}
@@ -398,11 +407,14 @@ function fillReadingLater(token) {
         tile.outerHTML = `<button type="button" class="tile" data-goto-forecast><span class="k">Coming up</span><span class="v">${esc(when)}</span><span class="s">${esc(d.title)}</span></button>`;
       } else tile.innerHTML = '<span class="k">Coming up</span><span class="v">Quiet</span><span class="s">Nothing major soon</span>';
     }
-    // exact dates for the expanded transit cards
+    // exact dates for the transit rows (computed after first paint)
     for (const a of aspects.slice(0, isMobile() ? 3 : 4)) {
       const chips = document.querySelector(`#panel details.tx[data-key="${aspectKey(a)}"] .chips`);
-      const text = chips && !chips.querySelector('.exact') ? exactText(a, jd) : '';
-      if (text) chips.insertAdjacentHTML('beforeend', `<span class="chip hot exact">${esc(text)}</span>`);
+      if (!chips || chips.dataset.exact) continue;
+      chips.dataset.exact = '1';
+      const { chip, block } = exactParts(a, jd);
+      if (chip) chips.insertAdjacentHTML('beforeend', chip);
+      if (block) chips.insertAdjacentHTML('afterend', block);
     }
     const w = $('#slot-world');
     const u = $('#slot-upcoming');
