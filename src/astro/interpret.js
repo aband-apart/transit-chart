@@ -1,7 +1,8 @@
-import { SIGNS, HOUSES, PLANETS, TARGETS, ASPECT_TEXT, LUNATION } from '../data/astro-data.js';
+import { SIGNS, HOUSES, PLANETS, TARGETS, ASPECT_TEXT, LUNATION, PLACEMENT_LINE } from '../data/astro-data.js';
 import { SIGN_NAMES, signIndex } from './chart.js';
 import { moonPhase } from './transits.js';
 import { SIGN_WORLD, PLANET_WORLD, WORLD_OVERRIDE } from '../data/mundane.js';
+import { PLANET_C, TARGET_C, HOUSES_C, PLACEMENT_C, REL_C, SEXTILE_NOTE_C, CLIMATE_C, COMPARE_THEMES_C } from '../data/collective-data.js';
 
 export const ordinal = (n) => {
   const s = ['th', 'st', 'nd', 'rd'];
@@ -10,7 +11,7 @@ export const ordinal = (n) => {
 };
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-const house = (n) => HOUSES[n - 1];
+
 const sign = (i) => SIGNS[i];
 
 // ---- Voice: who is the reading about? ----
@@ -26,12 +27,22 @@ export function setSubject(name, kind = 'person') {
 }
 
 export const isSelfVoice = () => SUBJECT === null;
+const collectiveVoice = () => SUBJECT?.mode === 'it';
+export const isCollectiveVoice = collectiveVoice;
+
+// Places, organizations and events use their own tables where the human metaphor doesn't fit.
+const planet = (k) => (collectiveVoice() && PLANET_C[k] ? { ...PLANETS[k], ...PLANET_C[k] } : PLANETS[k]);
+const targetInfo = (k) => (collectiveVoice() ? TARGET_C[k] : TARGETS[k]);
+const house = (n) => (collectiveVoice() ? HOUSES_C : HOUSES)[n - 1];
+export const houseInfo = house;
+export const placementLine = (k) => (collectiveVoice() ? PLACEMENT_C : PLACEMENT_LINE)[k];
 
 // Words after which "you" is an object ("with you", "mirror you") rather than a subject ("you need").
 const OBJECT_CUES = 'with|around|mirror|mirrors|see|sees|for|to|asks|ask|tests|test|calls|call|pulls|pull|pushes|push|helps|help|hit|hits|gives|give|tells|tell|makes|make|lets|about|toward|towards|of|at|like|than|from|by|on|upon|into|onto|beyond|behind|near|needs';
 const OBJECT_RE = new RegExp(`\\b(${OBJECT_CUES})(\\s+)you\\b`, 'gi');
 const MODALS = new Set(['can', 'could', 'will', 'would', 'should', 'may', 'might', 'must', 'shall', 'cannot']);
 const ADVERBS = 'actually|also|just|only|still|never|always|really|often|usually|simply|ever|already|even';
+const COORD_VERBS = new Set(['move', 'make', 'take', 'bring', 'hold', 'build', 'get', 'find', 'create', 'use', 'act', 'feel', 'go', 'keep', 'see', 'let', 'present', 'show', 'lead', 'follow', 'reach', 'grow', 'start', 'stop', 'set', 'put', 'carry', 'offer', 'meet', 'read', 'enter', 'notice', 'project', 'mirror', 'shine', 'love', 'give', 'think', 'speak', 'learn']);
 const IRREGULAR = { have: 'has', are: 'is', were: 'was', do: 'does', go: 'goes', "don't": "doesn't" };
 
 function conjugate3(word) {
@@ -61,7 +72,9 @@ export function voice(text) {
       .replace(/\b(You|you)'ve\b/g, (_, y) => (y === 'You' ? "It's" : "it's"))
       .replace(new RegExp(`\\b(You|you)((?:\\s+(?:${ADVERBS}))*)\\s+([A-Za-z']+)`, 'g'), (_, y, adv, verb) => `${y === 'You' ? 'It' : 'it'}${adv} ${MODALS.has(verb.toLowerCase()) ? verb : conjugate3(verb)}`)
       .replace(/\bYou\b/g, 'It')
-      .replace(/\byou\b/g, 'it');
+      .replace(/\byou\b/g, 'it')
+      // a second verb joined by and/or/but agrees with the same subject ("presents itself and moves")
+      .replace(new RegExp(`\\b(it(?:\\s+(?:${ADVERBS}))* [a-z]+(?:s|es)(?: itself)?) (and|or|but) ([a-z]+)\\b`, 'g'), (m, head, conj, verb) => (COORD_VERBS.has(verb) ? `${head} ${conj} ${conjugate3(verb)}` : m));
   } else {
     out = out
       .replace(/\bYou're\b/g, "They're").replace(/\byou're\b/g, "they're").replace(/\byou've\b/g, "they've")
@@ -118,8 +131,8 @@ const OUTER_PHRASE = {
 
 /** Narrative for one active transit-to-natal aspect. */
 export function describeAspect(a, natal) {
-  const P = PLANETS[a.transit];
-  const T = TARGETS[a.target];
+  const P = planet(a.transit);
+  const T = targetInfo(a.target);
   const A = ASPECT_TEXT[a.aspect];
   const targetHouse = natal.points[a.target].house;
 
@@ -139,7 +152,7 @@ export function describeAspect(a, natal) {
   return {
     title: `${P.name} ${A.name} ${natalLabel(a.target)}`,
     text: voice(parts.join(' ')),
-    note: voice(A.note),
+    note: voice(a.aspect === 'sextile' && collectiveVoice() ? SEXTILE_NOTE_C : A.note),
     pace: voice(P.pace),
     tip: advice(hard ? P.hardTip : P.softTip),
     avoid: hard ? advice(P.avoid) : null,
@@ -150,8 +163,8 @@ export function describeAspect(a, natal) {
 /** Short narrative for one forecast event. */
 function describeEventRaw(ev, natal) {
   if (ev.type === 'aspect') {
-    const P = PLANETS[ev.transit];
-    const T = TARGETS[ev.target];
+    const P = planet(ev.transit);
+    const T = targetInfo(ev.target);
     const A = ASPECT_TEXT[ev.aspect];
     const pass = ev.passes > 1 ? `, pass ${ev.pass} of ${ev.passes}` : '';
     const body = ev.tone === 'flowing' ? `${P.soft}` : ev.tone === 'challenging' ? `${P.hard}` : `${P.conj}`;
@@ -161,7 +174,7 @@ function describeEventRaw(ev, natal) {
     };
   }
   if (ev.type === 'station') {
-    const P = PLANETS[ev.transit];
+    const P = planet(ev.transit);
     const where = `${SIGN_NAMES[ev.sign]}, your ${ordinal(ev.house)} house of ${house(ev.house).label}`;
     const text = ev.direction === 'retrograde'
       ? `${P.name} slows to a stop and turns retrograde in ${where}. ${P.retro ?? 'Its themes turn inward and call for review.'}`
@@ -170,7 +183,7 @@ function describeEventRaw(ev, natal) {
     return { title: `${P.name} stations ${ev.direction}`, text: text + world };
   }
   if (ev.type === 'ingress') {
-    const P = PLANETS[ev.transit];
+    const P = planet(ev.transit);
     const h = house(ev.house);
     const re = ev.retro ? ' (backing into the sign while retrograde)' : '';
     return {
@@ -219,7 +232,7 @@ export function skyToday(natal, transit) {
     moonSign: SIGN_NAMES[signIndex(moon.lon)],
     moonHouse: moon.house,
     sunSign: SIGN_NAMES[signIndex(sun.lon)],
-    text: voice(`The ${phase.name} is in ${SIGN_NAMES[signIndex(moon.lon)]}, moving through your ${ordinal(mh)} house of ${house(mh).label}. Emotional attention gravitates toward ${house(mh).theme}.`),
+    text: voice(`The ${phase.name} is in ${SIGN_NAMES[signIndex(moon.lon)]}, moving through your ${ordinal(mh)} house of ${house(mh).label}. ${collectiveVoice() ? 'Public' : 'Emotional'} attention gravitates toward ${house(mh).theme}.`),
     retros,
   };
 }
@@ -237,15 +250,16 @@ export function natalPortrait(natal) {
   const top = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]);
   const ascRuler = S('asc').ruler.toLowerCase();
   const rulerPoint = p[ascRuler];
+  const col = collectiveVoice();
   const out = {
-    sun: `Sun in ${S('sun').name} (${ordinal(p.sun.house)} house) is ${S('sun').sun}.`,
-    moon: `Moon in ${S('moon').name} (${ordinal(p.moon.house)} house) ${S('moon').moon}.`,
-    rising: `${S('asc').name} Rising ${S('asc').rising}.`,
+    sun: col ? `Sun in ${S('sun').name} (${ordinal(p.sun.house)} house): its core character is shaped by ${SIGN_WORLD[p.sun.sign]}.` : `Sun in ${S('sun').name} (${ordinal(p.sun.house)} house) is ${S('sun').sun}.`,
+    moon: col ? `Moon in ${S('moon').name} (${ordinal(p.moon.house)} house): its public mood and everyday needs lean toward ${SIGN_WORLD[p.moon.sign]}.` : `Moon in ${S('moon').name} (${ordinal(p.moon.house)} house) ${S('moon').moon}.`,
+    rising: col ? `${S('asc').name} Rising: it presents itself to the world through ${SIGN_WORLD[p.asc.sign]}.` : `${S('asc').name} Rising ${S('asc').rising}.`,
     elements: top(el),
     modalities: top(mod),
     dominant: `Your chart leans ${top(el)[0][0]} and ${top(mod)[0][0]}.`,
     ruler: rulerPoint
-      ? `Your chart ruler is ${PLANETS[ascRuler].name}, placed in ${S(ascRuler).name} in the ${ordinal(rulerPoint.house)} house. That is where your life tends to organize itself.`
+      ? `Your chart ruler is ${PLANETS[ascRuler].name}, placed in ${S(ascRuler).name} in the ${ordinal(rulerPoint.house)} house. That is where ${col ? 'its direction' : 'your life'} tends to organize itself.`
       : '',
   };
   for (const k of ['sun', 'moon', 'rising', 'dominant', 'ruler']) out[k] = voice(out[k]);
@@ -267,15 +281,16 @@ export function buildReading({ natal, transit, aspects, events }) {
   for (const a of top) byPlanet[a.transit] = (byPlanet[a.transit] || 0) + a.strength;
   const lead = Object.entries(byPlanet).sort((a, b) => b[1] - a[1])[0]?.[0];
 
-  const headline = lead
-    ? `${PLANETS[lead].name} sets the tone: a ${climate} stretch centered on ${PLANETS[lead].principle}`
-    : 'A quiet stretch with few major transits touching your chart';
+  const headline = voice(lead
+    ? `${PLANETS[lead].name} sets the tone: a ${climate} stretch centered on ${planet(lead).principle}`
+    : 'A quiet stretch with few major transits touching your chart');
 
   const climateText = {
     demanding: 'The weight of the sky is on the challenging side right now. That usually feels like pressure, but it is also the kind of period that forces real growth and decisive change.',
     supportive: 'The sky is largely supportive right now. Things come more easily than usual, so this is a good window to act on what you want.',
     mixed: 'The sky is mixed right now, with supportive and challenging influences side by side. Expect to feel pulled in two directions, and use the easy energy to carry the hard parts.',
   }[climate];
+  const climateOut = collectiveVoice() ? CLIMATE_C[climate] : climateText;
 
   // Where does the action play out? Weight by the house of the natal point hit.
   const houseWeight = {};
@@ -288,7 +303,7 @@ export function buildReading({ natal, transit, aspects, events }) {
   // Slow-planet "season" placements
   const seasons = ['saturn', 'jupiter', 'uranus', 'neptune', 'pluto', 'chiron'].map((k) => {
     const t = transit.points[k];
-    const P = PLANETS[k];
+    const P = planet(k);
     const h = house(t.house);
     return {
       key: k,
@@ -304,7 +319,7 @@ export function buildReading({ natal, transit, aspects, events }) {
   for (const a of top) {
     if (seen.has(a.transit)) continue;
     seen.add(a.transit);
-    const P = PLANETS[a.transit];
+    const P = planet(a.transit);
     const hard = a.tone !== 'flowing';
     doTips.push({ source: `${P.name} ${ASPECT_TEXT[a.aspect].name} ${natalLabel(a.target)}`, text: advice(hard ? P.hardTip : P.softTip) });
     if (hard) avoidTips.push({ source: P.name, text: advice(P.avoid) });
@@ -323,7 +338,7 @@ export function buildReading({ natal, transit, aspects, events }) {
   return {
     headline,
     climate,
-    climateText: voice(climateText),
+    climateText: voice(climateOut),
     focusText: voice(focusText),
     focusHouses,
     seasons,
@@ -351,10 +366,18 @@ const SYN_TONE = {
   challenging: 'This is a growth edge. It asks for patience and direct conversation.',
   intense: 'This is a strong link that is hard to ignore.',
 };
+const isColl = (kind) => kind === 'place' || kind === 'event';
 const has = (a, x, y) => (a.transit === x && a.target === y) || (a.transit === y && a.target === x);
 const involves = (a, k) => a.transit === k || a.target === k;
 
-function synFlavor(a) {
+function synFlavor(a, coll = false) {
+  if (coll) {
+    if (has(a, 'venus', 'mars')) return 'Venus–Mars contact is a strong pull between values and drive.';
+    if (has(a, 'sun', 'moon')) return 'Sun–Moon contact lines identity up with public mood.';
+    if (a.transit === 'moon' && a.target === 'moon') return 'Moon–Moon contact means a shared public mood.';
+    if (involves(a, 'saturn')) return 'Saturn contacts often mean structure, commitment, or a sense of being tested.';
+    if (involves(a, 'neptune')) return 'Neptune adds idealization, so check what is real.';
+  }
   if (has(a, 'venus', 'mars')) return 'Venus–Mars contact is classic chemistry.';
   if (has(a, 'sun', 'moon')) return 'Sun–Moon contact is a classic marker of compatibility.';
   if (a.transit === 'moon' && a.target === 'moon') return 'Moon–Moon contact means you instinctively read each other\'s moods.';
@@ -366,25 +389,29 @@ function synFlavor(a) {
   return '';
 }
 
-export function describeSynastry(a, nameA, nameB) {
+export function describeSynastry(a, nameA, nameB, kindA = 'person', kindB = 'person') {
   const A = ASPECT_TEXT[a.aspect];
+  const coll = isColl(kindA) || isColl(kindB);
+  const REL_A = isColl(kindA) ? REL_C : REL;
+  const REL_B = isColl(kindB) ? REL_C : REL;
   const pa = PLANETS[a.target].name;
   const pb = PLANETS[a.transit].name;
   return {
     title: `${nameB}'s ${pb} ${A.name} ${nameA}'s ${pa}`,
-    text: `${nameB}'s ${pb} (${REL[a.transit]}) ${SYN_VERB[a.aspect]} ${nameA}'s ${pa} (${REL[a.target]}). ${SYN_TONE[a.tone]} ${synFlavor(a)}`.trim(),
+    text: `${nameB}'s ${pb} (${REL_B[a.transit]}) ${SYN_VERB[a.aspect]} ${nameA}'s ${pa} (${REL_A[a.target]}). ${SYN_TONE[a.tone]} ${synFlavor(a, coll)}`.trim(),
   };
 }
 
 /** Overall read of how two charts relate. */
-export function compareSummary(aspects, nameA, nameB) {
+export function compareSummary(aspects, nameA, nameB, kindA = 'person', kindB = 'person') {
+  const coll = isColl(kindA) || isColl(kindB);
   const top = aspects.slice(0, 12);
   const hard = top.filter((a) => a.tone !== 'flowing').reduce((s, a) => s + a.strength, 0);
   const soft = top.filter((a) => a.tone === 'flowing').reduce((s, a) => s + a.strength, 0);
   const ratio = hard + soft ? hard / (hard + soft) : 0.5;
   const climate = ratio > 0.65 ? 'charged' : ratio < 0.4 ? 'harmonious' : 'balanced';
   const climateText = {
-    charged: `${nameA} and ${nameB} meet with a lot of friction and intensity. That can read as strong attraction or repeated conflict, and it tends to push both to grow.`,
+    charged: `${nameA} and ${nameB} meet with a lot of friction and intensity. ${coll ? 'That can show up as a strong pull or repeated conflict, and it tends to push both to adapt.' : 'That can read as strong attraction or repeated conflict, and it tends to push both to grow.'}`,
     harmonious: `${nameA} and ${nameB} fit together with relative ease. The risk is complacency, since comfort is rarely tested.`,
     balanced: `${nameA} and ${nameB} have a mix of ease and friction, so there is both comfort and something to work on.`,
   }[climate];
@@ -401,12 +428,13 @@ export function compareSummary(aspects, nameA, nameB) {
     [(a) => involves(a, 'node'), 'A Node contact: a sense of purpose or fate.'],
     [(a) => has(a, 'mercury', 'mercury') || (a.transit === 'mercury' && a.target === 'mercury'), 'Mercury–Mercury link: easy conversation, or crossed wires.'],
   ];
-  for (const [f, text] of rules) {
+  const swap = coll ? [COMPARE_THEMES_C.sunMoon, COMPARE_THEMES_C.venusMars, COMPARE_THEMES_C.moonMoon, COMPARE_THEMES_C.venusVenus, null, null, COMPARE_THEMES_C.asc] : [];
+  rules.forEach(([f, text], i) => {
     const a = find(f);
-    if (a) themes.push({ text, tone: a.tone });
-  }
-  const strengths = top.filter((a) => a.tone === 'flowing').slice(0, 3).map((a) => describeSynastry(a, nameA, nameB));
-  const frictions = top.filter((a) => a.tone !== 'flowing').slice(0, 3).map((a) => describeSynastry(a, nameA, nameB));
+    if (a) themes.push({ text: swap[i] || text, tone: a.tone });
+  });
+  const strengths = top.filter((a) => a.tone === 'flowing').slice(0, 3).map((a) => describeSynastry(a, nameA, nameB, kindA, kindB));
+  const frictions = top.filter((a) => a.tone !== 'flowing').slice(0, 3).map((a) => describeSynastry(a, nameA, nameB, kindA, kindB));
   return { climate, climateText, themes, strengths, frictions };
 }
 const LUM_OR_PERSONAL = new Set(['sun', 'moon', 'venus', 'mars', 'mercury', 'asc']);

@@ -4,7 +4,7 @@ import { natalFromBirth, buildChart, formatPos, houseOf, withSolarHouses, HOUSE_
 import { transitAspects, synastryAspects } from './astro/aspects.js';
 import { forecast, aspectPasses, outerAspects } from './astro/transits.js';
 import { isValidTimeZone } from './astro/time.js';
-import { describeAspect, describeEvent, buildReading, skyToday, natalPortrait, natalLabel, ordinal, describeSynastry, compareSummary, setSubject, voice, possessive, isSelfVoice } from './astro/interpret.js';
+import { describeAspect, describeEvent, buildReading, skyToday, natalPortrait, natalLabel, ordinal, describeSynastry, compareSummary, setSubject, voice, possessive, isSelfVoice, houseInfo, placementLine } from './astro/interpret.js';
 import { migrateKind } from './lib/charts-io.js';
 import { initManage } from './ui/manage.js';
 import { PLANETS, SIGNS, HOUSES, PLACEMENT_LINE } from './data/astro-data.js';
@@ -338,13 +338,13 @@ function natalView() {
     <div class="two"><div class="card"><div class="eyebrow">Elements</div><div class="elbars">${bar(port.elements)}</div></div>
     <div class="card"><div class="eyebrow">Modalities</div><div class="elbars">${bar(port.modalities)}</div></div></div>
     <h3 class="section-title">${esc(voice('Your placements'))}</h3>
-    ${keys.map((k) => { const p = n.points[k]; const h = HOUSES[p.house - 1]; return `<div class="card place"><h3>${g(k)}${esc(PLANETS[k].name)} in ${esc(SIGNS[p.sign].name)}${p.retro && !['node', 'southnode'].includes(k) ? ' ℞' : ''} · ${ordinal(p.house)} house</h3><p class="muted" style="margin:2px 0 0">${esc(voice(`${PLACEMENT_LINE[k]}, expressed through ${h.theme}.`))}</p></div>`; }).join('')}
+    ${keys.map((k) => { const p = n.points[k]; const h = houseInfo(p.house); return `<div class="card place"><h3>${g(k)}${esc(PLANETS[k].name)} in ${esc(SIGNS[p.sign].name)}${p.retro && !['node', 'southnode'].includes(k) ? ' ℞' : ''} · ${ordinal(p.house)} house</h3><p class="muted" style="margin:2px 0 0">${esc(voice(`${placementLine(k)}, expressed through ${h.theme}.`))}</p></div>`; }).join('')}
     <details class="sec" ${isMobile() ? '' : 'open'}><summary>Positions</summary><div class="sec-body"><div class="card"><table><thead><tr><th>Body</th><th>Sign</th><th>Position</th><th>House</th></tr></thead><tbody>${rows}</tbody></table></div></div></details>
-    ${n.timeUnknown ? '' : `<details class="sec" ${isMobile() ? '' : 'open'}><summary>House cusps (${HOUSE_SYSTEMS[n.houseSystem] ?? 'Placidus'})</summary><div class="sec-body"><div class="card"><table><thead><tr><th>House</th><th>Theme</th><th>Cusp</th></tr></thead><tbody>${HOUSES.map((h, i) => `<tr><td>${h.n}</td><td>${esc(h.label)}</td><td>${formatPos(n.cusps[i])}</td></tr>`).join('')}</tbody></table></div></div></details>`}`;
+    ${n.timeUnknown ? '' : `<details class="sec" ${isMobile() ? '' : 'open'}><summary>House cusps (${HOUSE_SYSTEMS[n.houseSystem] ?? 'Placidus'})</summary><div class="sec-body"><div class="card"><table><thead><tr><th>House</th><th>Theme</th><th>Cusp</th></tr></thead><tbody>${HOUSES.map((h0, i) => { const h = houseInfo(h0.n); return `<tr><td>${h.n}</td><td>${esc(h.label)}</td><td>${formatPos(n.cusps[i])}</td></tr>`; }).join('')}</tbody></table></div></div></details>`}`;
 }
 
 function synCard(a, c) {
-  const d = describeSynastry(a, c.nameA, c.nameB);
+  const d = describeSynastry(a, c.nameA, c.nameB, c.pa.kind, c.pb.kind);
   const sel = state.selected === aspectKey(a);
   return `<article class="card tcard ${a.tone}${sel ? ' selected' : ''}" data-asp="${aspectKey(a)}">
     <header><span class="glyphs">${PLANETS[a.transit].glyph}${VS} ${a.glyph}${VS} ${PLANETS[a.target].glyph}${VS}</span><h3>${esc(d.title)}</h3></header>
@@ -358,14 +358,14 @@ function overlayTable(title, from, to, fromName, toName) {
   const rows = keys.filter((k) => from.points[k]).map((k) => {
     const lon = from.points[k].lon;
     const h = houseOf(lon, to.cusps);
-    return `<tr><td>${g(k)}${esc(PLANETS[k].name)}</td><td>${sg(Math.floor(lon / 30))}${esc(SIGNS[Math.floor(lon / 30)].name)}</td><td>${ordinal(h)} · ${esc(HOUSES[h - 1].label)}</td></tr>`;
+    return `<tr><td>${g(k)}${esc(PLANETS[k].name)}</td><td>${sg(Math.floor(lon / 30))}${esc(SIGNS[Math.floor(lon / 30)].name)}</td><td>${ordinal(h)} · ${esc(houseInfo(h).label)}</td></tr>`;
   }).join('');
   return `<div class="card"><div class="eyebrow">${esc(title)}</div><table><thead><tr><th>${esc(fromName)}</th><th>Sign</th><th>Lands in ${esc(toName)}'s house</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function compareView() {
   const c = compareData();
-  const sum = compareSummary(c.aspects, c.nameA, c.nameB);
+  const sum = compareSummary(c.aspects, c.nameA, c.nameB, c.pa.kind, c.pb.kind);
   const top = c.aspects.slice(0, 10);
   const li = (x) => `<li>${esc(x.title)}<span class="src">${esc(x.text)}</span></li>`;
   const unusual = ['place', 'event'].includes(c.pa.kind) || ['place', 'event'].includes(c.pb.kind);
